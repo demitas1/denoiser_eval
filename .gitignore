@@ -1,0 +1,28 @@
+# 外部クローンリポジトリ（models/ 配下のすべてのサブディレクトリ）
+# DnCNN, KAIR, NAFNet, Restormer, SCUNet など今後追加するモデルもすべて対象
+models/*/
+
+# 推論結果（生成物、大容量バイナリ）
+results/
+
+# テスト入力画像（大容量バイナリ）
+test_inputs/
+
+# セッション固有ファイル
+claude-resume.sh
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
