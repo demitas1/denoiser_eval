@@ -176,6 +176,11 @@ Image.fromarray(out.astype(np.uint8)).save('output.png')
 
 ### 3. NAFNet
 
+> **⚠ スキップ済み（2026-05-15）**
+> NAFNet は独自改変版の basicsr を同梱しており、CUDA 拡張（deform_conv、fused_act）のコンパイルを伴うインストールが必要。
+> `python setup.py develop --no_cuda_ext` はモダンな setuptools（PEP 517 経由）では `--no_cuda_ext` フラグが届かず、ソースが存在しない CUDA 拡張のビルドに失敗する。
+> 回避策として sys.path 追加も検討したが、インストール不要で動作するか未検証のため、このサイクルの評価対象から除外。
+
 実世界ノイズ (SIDD) で学習された SOTA 級モデル。
 
 ```bash

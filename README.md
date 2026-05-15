@@ -136,3 +136,58 @@ python scripts/run_ffdnet.py --input test_inputs/ --output results/FFDNet --sigm
 
 - **フォーマット**: PNG / JPG / JPEG / BMP / TIF（カラーも可、内部でグレースケール変換）
 - **サイズ**: 制限なし（全畳み込みネットワーク）。RTX 3060 12GB で 3000×3000 前後まで一括処理可能
+
+---
+
+## Restormer の実行
+
+Transformer ベースの高性能デノイザ。`Real_Denoising`（実世界ノイズ）と `Gaussian_Gray_Denoising`（グレースケールブラインド）の2タスクに対応。
+
+### 1. モデルリポジトリのクローンと重みのダウンロード
+
+```bash
+cd /path/to/denoiser_eval
+
+git clone https://github.com/swz30/Restormer.git models/Restormer
+
+# 依存パッケージのインストール
+pip install einops gdown natsort lpips
+
+# 重みのダウンロード（gdown を使用）
+# Real Denoising
+gdown 1FF_4NTboTWQ7sHCq4xhyLZsSl0U0JfjH \
+  -O models/Restormer/Denoising/pretrained_models/real_denoising.pth
+
+# Gaussian Denoising（フォルダごと）
+gdown --folder 1Qwsjyny54RZWa7zC4Apg7exixLBo4uF0 \
+  -O models/Restormer/Denoising/pretrained_models/
+# ダウンロード後、ネストされた pretrained_models/ 内のファイルを親ディレクトリに移動:
+# mv models/Restormer/Denoising/pretrained_models/pretrained_models/*.pth \
+#    models/Restormer/Denoising/pretrained_models/
+```
+
+> `setup.py develop` は不要。`scripts/run_restormer.py` が `sys.path` で自動的に `models/Restormer` を参照します。
+
+### 2. 推論の実行
+
+```bash
+cd /path/to/denoiser_eval
+
+# Real Denoising（実世界ノイズ、デフォルト）
+python scripts/run_restormer.py --input test_inputs/ --output results/Restormer
+
+# Gaussian Gray Denoising（グレースケールブラインド）
+python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denoising
+```
+
+出力は `results/Restormer/<タスク名>/<元のファイル名>_restormer_<タスク>.png` に保存されます。
+
+### オプション
+
+| 引数 | デフォルト | 説明 |
+|---|---|---|
+| `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
+| `--output` | `results/Restormer` | 出力ディレクトリ |
+| `--task` | `Real_Denoising` | `Real_Denoising` または `Gaussian_Gray_Denoising` |
+| `--tile` | `512` | タイルサイズ（0 で無効化） |
+| `--cpu` | off | CPU 推論を強制 |
