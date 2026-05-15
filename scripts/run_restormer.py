@@ -1,5 +1,5 @@
 """
-Restormer でデノイズを実行するスクリプト。
+Restormer でデノイズ／デブラーを実行するスクリプト。
 sys.path 追加でインストール不要。
 
 使い方:
@@ -7,7 +7,13 @@ sys.path 追加でインストール不要。
   python scripts/run_restormer.py --input test_inputs/ --output results/Restormer
 
   # Gaussian Gray Denoising（グレースケールブラインド）
-  python scripts/run_restormer.py --input test_inputs/ --output results/Restormer --task Gaussian_Gray_Denoising
+  python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denoising
+
+  # Motion Deblurring（モーションブラー除去）
+  python scripts/run_restormer.py --input test_inputs/ --task Motion_Deblurring
+
+  # Defocus Deblurring（ピンボケ除去）
+  python scripts/run_restormer.py --input test_inputs/ --task Defocus_Deblurring
 
   # VRAM が厳しい場合はタイルサイズを小さく
   python scripts/run_restormer.py --input test_inputs/ --tile 256
@@ -28,26 +34,37 @@ RESTORMER_DIR = os.path.join(os.path.dirname(__file__), '..', 'models', 'Restorm
 sys.path.insert(0, RESTORMER_DIR)
 from basicsr.models.archs.restormer_arch import Restormer
 
+_DENOISE_PARAMS_BIASFREE = {
+    'dim': 48, 'num_blocks': [4, 6, 6, 8], 'num_refinement_blocks': 4,
+    'heads': [1, 2, 4, 8], 'ffn_expansion_factor': 2.66,
+    'bias': False, 'LayerNorm_type': 'BiasFree', 'dual_pixel_task': False,
+}
+_DEBLUR_PARAMS_WITHBIAS = {
+    'dim': 48, 'num_blocks': [4, 6, 6, 8], 'num_refinement_blocks': 4,
+    'heads': [1, 2, 4, 8], 'ffn_expansion_factor': 2.66,
+    'bias': False, 'LayerNorm_type': 'WithBias', 'dual_pixel_task': False,
+}
+
 TASK_CONFIGS = {
     'Real_Denoising': {
         'weights': 'Denoising/pretrained_models/real_denoising.pth',
-        'params': {
-            'inp_channels': 3, 'out_channels': 3, 'dim': 48,
-            'num_blocks': [4, 6, 6, 8], 'num_refinement_blocks': 4,
-            'heads': [1, 2, 4, 8], 'ffn_expansion_factor': 2.66,
-            'bias': False, 'LayerNorm_type': 'BiasFree', 'dual_pixel_task': False,
-        },
+        'params': {'inp_channels': 3, 'out_channels': 3, **_DENOISE_PARAMS_BIASFREE},
         'grayscale': False,
     },
     'Gaussian_Gray_Denoising': {
         'weights': 'Denoising/pretrained_models/gaussian_gray_denoising_blind.pth',
-        'params': {
-            'inp_channels': 1, 'out_channels': 1, 'dim': 48,
-            'num_blocks': [4, 6, 6, 8], 'num_refinement_blocks': 4,
-            'heads': [1, 2, 4, 8], 'ffn_expansion_factor': 2.66,
-            'bias': False, 'LayerNorm_type': 'BiasFree', 'dual_pixel_task': False,
-        },
+        'params': {'inp_channels': 1, 'out_channels': 1, **_DENOISE_PARAMS_BIASFREE},
         'grayscale': True,
+    },
+    'Motion_Deblurring': {
+        'weights': 'Motion_Deblurring/pretrained_models/motion_deblurring.pth',
+        'params': {'inp_channels': 3, 'out_channels': 3, **_DEBLUR_PARAMS_WITHBIAS},
+        'grayscale': False,
+    },
+    'Defocus_Deblurring': {
+        'weights': 'Defocus_Deblurring/pretrained_models/single_image_defocus_deblurring.pth',
+        'params': {'inp_channels': 3, 'out_channels': 3, **_DEBLUR_PARAMS_WITHBIAS},
+        'grayscale': False,
     },
 }
 

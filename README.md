@@ -179,6 +179,12 @@ python scripts/run_restormer.py --input test_inputs/ --output results/Restormer
 
 # Gaussian Gray Denoising（グレースケールブラインド）
 python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denoising
+
+# Motion Deblurring（モーションブラー除去）
+python scripts/run_restormer.py --input test_inputs/ --task Motion_Deblurring
+
+# Defocus Deblurring（ピンボケ除去）
+python scripts/run_restormer.py --input test_inputs/ --task Defocus_Deblurring
 ```
 
 出力は `results/Restormer/<タスク名>/<元のファイル名>_restormer_<タスク>.png` に保存されます。
@@ -189,7 +195,7 @@ python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denois
 |---|---|---|
 | `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
 | `--output` | `results/Restormer` | 出力ディレクトリ |
-| `--task` | `Real_Denoising` | `Real_Denoising` または `Gaussian_Gray_Denoising` |
+| `--task` | `Real_Denoising` | `Real_Denoising`, `Gaussian_Gray_Denoising`, `Motion_Deblurring`, `Defocus_Deblurring` |
 | `--tile` | `512` | タイルサイズ（0 で無効化） |
 | `--cpu` | off | CPU 推論を強制 |
 
