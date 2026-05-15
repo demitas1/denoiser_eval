@@ -120,8 +120,9 @@ python scripts/run_ffdnet.py --input test_inputs/ --output results/FFDNet --sigm
 | 引数 | デフォルト | 説明 |
 |---|---|---|
 | `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
-| `--output` | `results/DnCNN` | 出力ディレクトリ |
-| `--model` | `models/KAIR/model_zoo/dncnn_gray_blind.pth` | 重みファイルのパス |
+| `--output` | `results/FFDNet` | 出力ディレクトリ |
+| `--model` | `models/KAIR/model_zoo/ffdnet_gray.pth` | 重みファイルのパス |
+| `--sigma` | `5 10 15 20 25 50` | ノイズレベル（複数指定可） |
 | `--cpu` | off | GPU が使えない場合に CPU 推論を強制 |
 
 利用可能な重み（`models/KAIR/model_zoo/`）:
@@ -190,4 +191,69 @@ python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denois
 | `--output` | `results/Restormer` | 出力ディレクトリ |
 | `--task` | `Real_Denoising` | `Real_Denoising` または `Gaussian_Gray_Denoising` |
 | `--tile` | `512` | タイルサイズ（0 で無効化） |
+| `--cpu` | off | CPU 推論を強制 |
+
+---
+
+## SCUNet の実行
+
+実世界ブラインドデノイザ。多様な劣化を含む合成データで学習。`scunet_color_real_psnr`（PSNR版）と `scunet_color_real_gan`（GAN版）に加え、グレースケール固定ノイズレベルモデルも利用可能。
+
+### 1. モデルリポジトリのクローンと重みのダウンロード
+
+```bash
+cd /path/to/denoiser_eval
+
+git clone https://github.com/cszn/SCUNet.git models/SCUNet
+
+# 依存パッケージのインストール
+pip install thop timm
+
+# 重みのダウンロード（GitHub releases から自動取得）
+conda run -n denoiser python models/SCUNet/main_download_pretrained_models.py \
+  --models "SCUNet" --model_dir models/SCUNet/model_zoo
+```
+
+> `setup.py` のインストールは不要。`scripts/run_scunet.py` が `sys.path` で自動的に `models/SCUNet` を参照します。
+
+### 2. 推論の実行
+
+```bash
+cd /path/to/denoiser_eval
+
+# 実世界ノイズ（PSNR版、デフォルト）
+python scripts/run_scunet.py --input test_inputs/ --output results/SCUNet
+
+# 実世界ノイズ（GAN版）
+python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_gan
+
+# グレースケール3強度を一括出力
+python scripts/run_scunet.py --input test_inputs/ --model scunet_gray_15 scunet_gray_25 scunet_gray_50
+
+# 複数モデルを任意に組み合わせ
+python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr scunet_gray_25
+```
+
+出力は `results/SCUNet/<元のファイル名>_scunet_<モデル名>.png` に保存されます。
+
+### モデルの選択指針
+
+| モデル | 特性 |
+|---|---|
+| `scunet_color_real_psnr` | ピクセル誤差学習。安全だが線がぼやけがち |
+| `scunet_color_real_gan` | 敵対学習。シャープだが線の捏造リスクあり |
+| `scunet_gray_15` | グレースケール固定 sigma=15 相当（弱） |
+| `scunet_gray_25` | グレースケール固定 sigma=25 相当（中） |
+| `scunet_gray_50` | グレースケール固定 sigma=50 相当（強） |
+
+鉛筆スケッチには **PSNR版から先に試す** のが妥当（捏造リスク低）。PSNR版より強め・GAN版より安全な中間が欲しい場合は `scunet_gray_*` の3強度を一括比較するとよい。
+
+### オプション
+
+| 引数 | デフォルト | 説明 |
+|---|---|---|
+| `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
+| `--output` | `results/SCUNet` | 出力ディレクトリ |
+| `--model` | `scunet_color_real_psnr` | モデル名（複数指定可） |
+| `--model_zoo` | `models/SCUNet/model_zoo` | 重みディレクトリ |
 | `--cpu` | off | CPU 推論を強制 |

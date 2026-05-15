@@ -11,9 +11,9 @@ Linux 環境前提、入力 1024×1024 グレースケール想定。
 |---|---|---|---|---|---|---|
 | DnCNN | ✓ | 1〜2 GB | 4〜6 GB | ネイティブ | 約 0.1 秒 | 軽い・古典・実験用 |
 | FFDNet | ✓ | 1〜2 GB | 4〜6 GB | ネイティブ | 約 0.1 秒 | 強度可変・実験用 |
-| NAFNet (w32) | ✓ | 3〜4 GB | 8〜10 GB | 3ch複製 | 約 0.3 秒 | 実ノイズ向き・SOTA級 |
-| Restormer | ✓ | 6〜8 GB | 厳しい (12GB) | 3ch複製 | 約 1〜2 秒 | 重いが高品質期待 |
-| SCUNet | ✓ | 4〜6 GB | 10〜12 GB | 3ch複製 | 約 0.5 秒 | ブラインド設計・本命候補 |
+| NAFNet (w32) | ✗ スキップ | — | — | — | — | CUDA 拡張ビルド失敗 |
+| Restormer | ✓ | 6〜8 GB | 厳しい (12GB) | Real: 3ch, Gaussian Gray: ネイティブ | 約 1〜2 秒 | 重いが高品質 |
+| SCUNet | ✓ | 4〜6 GB | 10〜12 GB | color: 3ch, gray_*: ネイティブ | 約 0.5 秒 | ブラインド設計・本命候補 |
 
 VRAM 数値は目安。バッチサイズ・モデルバリアントにより変動。
 
@@ -233,44 +233,44 @@ img.save('output_gray.png')
 
 Transformer ベース、最大級の品質期待。ただし重い。
 
-```bash
-cd ~/denoiser_eval/models
-git clone https://github.com/swz30/Restormer.git
-cd Restormer
-pip install -r requirements.txt
-python setup.py develop --no_cuda_ext
-```
-
-**事前学習済みモデルのダウンロード**:
-
-公式のダウンロードスクリプトあり。
+**セットアップ**: `setup.py` のインストールは不要。`scripts/run_restormer.py` が `sys.path` で自動的に `models/Restormer` を参照する（basicsr の DCN 依存はコメントアウト済みで import 可能）。
 
 ```bash
-python download_data.py --data train-test --noise gaussian_color_denoising
-# Denoising/pretrained_models/ に gaussian_color_denoising_sigma15.pth など配置
+cd ~/denoiser_eval
+git clone https://github.com/swz30/Restormer.git models/Restormer
+
+# 依存パッケージ
+pip install einops gdown natsort lpips
+
+# 重みのダウンロード
+# Real Denoising
+gdown 1FF_4NTboTWQ7sHCq4xhyLZsSl0U0JfjH \
+  -O models/Restormer/Denoising/pretrained_models/real_denoising.pth
+
+# Gaussian Denoising（フォルダごと）
+gdown --folder 1Qwsjyny54RZWa7zC4Apg7exixLBo4uF0 \
+  -O models/Restormer/Denoising/pretrained_models/
+# gdown はネストした pretrained_models/pretrained_models/ に展開されるため手動で移動:
+mv models/Restormer/Denoising/pretrained_models/pretrained_models/*.pth \
+   models/Restormer/Denoising/pretrained_models/
 ```
 
-ガウシアン以外も含めて 5 タスク用の重みがあるので、まずは Gaussian Color Denoising と Real Denoising の 2 種を試すのが筋。
-
-**推論サンプル**:
+**推論**:
 
 ```bash
-cd Denoising
-python demo.py \
-  --task Real_Denoising \
-  --input_dir ~/denoiser_eval/test_inputs/ \
-  --result_dir ~/denoiser_eval/results/Restormer/
+cd ~/denoiser_eval
+
+# Real Denoising（実世界ノイズ、デフォルト）
+python scripts/run_restormer.py --input test_inputs/ --output results/Restormer
+
+# Gaussian Gray Denoising（グレースケールブラインド、1ch ネイティブ）
+python scripts/run_restormer.py --input test_inputs/ --task Gaussian_Gray_Denoising
 ```
 
-**重要な注意**: 1024×1024 を一発で処理する VRAM 要求は約 6〜8GB。RTX 3060 12GB なら可能だが、他のプロセスとの併用は厳しい。タイル推論オプション (`--tile 512`) を併用すると安全。
+出力は `results/Restormer/<タスク名>/<元のファイル名>_restormer_<タスク>.png`。
+タイルサイズはデフォルト 512 で VRAM を節約済み（1024²: 6〜8GB）。
 
-```bash
-python demo.py --task Real_Denoising --tile 512 --tile_overlap 32 \
-  --input_dir ~/denoiser_eval/test_inputs/ \
-  --result_dir ~/denoiser_eval/results/Restormer/
-```
-
-**所要時間目安**: 環境構築 20分 + モデルダウンロード 10分 + 動作確認 15分
+**所要時間目安**: クローン 5分 + 重みダウンロード 5分 + 動作確認 10分
 
 ---
 
@@ -278,37 +278,49 @@ python demo.py --task Real_Denoising --tile 512 --tile_overlap 32 \
 
 実世界ブラインドデノイザ。多様な劣化を含む合成データで学習。鉛筆ノイズに最も「なんとなく効きそう」な候補。
 
-```bash
-cd ~/denoiser_eval/models
-git clone https://github.com/cszn/SCUNet.git
-cd SCUNet
-
-# 事前学習済みモデルをダウンロード
-python main_download_pretrained_models.py
-# model_zoo/ に scunet_color_real_psnr.pth, scunet_color_real_gan.pth など
-```
-
-PSNR 版と GAN 版の 2 つがあり、性質が異なる:
-
-- `scunet_color_real_psnr.pth`: ピクセル誤差で学習。安全だが線がぼやけがち。
-- `scunet_color_real_gan.pth`: 敵対学習で学習。シャープだが捏造リスクあり。
-
-本タスクでは **PSNR 版から先に試す** のが妥当 (捏造リスク低)。
-
-**推論サンプル**:
+**セットアップ**: `setup.py` のインストールは不要。`scripts/run_scunet.py` が `sys.path` で自動的に `models/SCUNet` を参照する。依存: `thop`, `timm`。
 
 ```bash
-python main_test_scunet_real_application.py \
-  --model_name scunet_color_real_psnr \
-  --testset_name ~/denoiser_eval/test_inputs/ \
-  --results_dir ~/denoiser_eval/results/SCUNet/
+cd ~/denoiser_eval
+git clone https://github.com/cszn/SCUNet.git models/SCUNet
+
+pip install thop timm
+
+# 重みのダウンロード
+python models/SCUNet/main_download_pretrained_models.py \
+  --models "SCUNet" --model_dir models/SCUNet/model_zoo
+# model_zoo/ に scunet_color_real_psnr.pth, scunet_color_real_gan.pth,
+#   scunet_gray_15/25/50.pth, scunet_color_15/25/50.pth が得られる
 ```
 
-KAIR 経由でも同じモデルを使える。
+**モデルの性質**:
 
-**グレースケール処理**: NAFNet と同様、3ch に複製して入力 → 出力をグレースケール化。
+| モデル | 特性 |
+|---|---|
+| `scunet_color_real_psnr` | ピクセル誤差学習。安全だが線がぼやけがち |
+| `scunet_color_real_gan` | 敵対学習。シャープだが線の捏造リスクあり |
+| `scunet_gray_15/25/50` | グレースケール固定ノイズレベル（1ch ネイティブ） |
 
-**所要時間目安**: 環境構築 10分 + モデルダウンロード 5分 + 動作確認 10分
+本タスクでは **PSNR 版から先に試す** のが妥当（捏造リスク低）。PSNR より強め・GAN より安全な中間が欲しい場合は gray 3強度を一括比較。
+
+**推論**:
+
+```bash
+cd ~/denoiser_eval
+
+# 実世界ノイズ（PSNR版、デフォルト）
+python scripts/run_scunet.py --input test_inputs/ --output results/SCUNet
+
+# 実世界ノイズ（GAN版）
+python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_gan
+
+# グレースケール3強度を一括出力
+python scripts/run_scunet.py --input test_inputs/ --model scunet_gray_15 scunet_gray_25 scunet_gray_50
+```
+
+出力は `results/SCUNet/<元のファイル名>_scunet_<モデル名>.png`。
+
+**所要時間目安**: クローン 5分 + 重みダウンロード 5分 + 動作確認 10分
 
 ---
 
@@ -361,11 +373,11 @@ INPUT_DIR=~/denoiser_eval/test_inputs
 RESULTS=~/denoiser_eval/results
 
 # 各モデルの推論を呼び出す (各モデル個別のラッパースクリプトを用意)
-python scripts/run_dncnn.py    --input $INPUT_DIR --output $RESULTS/DnCNN
-python scripts/run_ffdnet.py   --input $INPUT_DIR --output $RESULTS/FFDNet --sigma 25
-python scripts/run_nafnet.py   --input $INPUT_DIR --output $RESULTS/NAFNet
+python scripts/run_dncnn.py     --input $INPUT_DIR --output $RESULTS/DnCNN
+python scripts/run_ffdnet.py    --input $INPUT_DIR --output $RESULTS/FFDNet --sigma 10 15 25
 python scripts/run_restormer.py --input $INPUT_DIR --output $RESULTS/Restormer
-python scripts/run_scunet.py   --input $INPUT_DIR --output $RESULTS/SCUNet
+python scripts/run_scunet.py    --input $INPUT_DIR --output $RESULTS/SCUNet \
+  --model scunet_color_real_psnr scunet_gray_15 scunet_gray_25 scunet_gray_50
 
 # 横並び画像を生成
 python scripts/make_comparison_grid.py --inputs $INPUT_DIR --results $RESULTS
@@ -384,13 +396,12 @@ python scripts/make_comparison_grid.py --inputs $INPUT_DIR --results $RESULTS
 2. DnCNN + FFDNet (KAIR 経由で 2 つ同時取得)
 3. 1〜2 枚のテスト画像で動作確認
 
-**Day 2** (重い 3 つ):
-1. NAFNet をセットアップして実行
-2. SCUNet をセットアップして実行
-3. Restormer をセットアップして実行
+**Day 2** (重い 2 つ):
+1. SCUNet をセットアップして実行（gray 3強度も一括）
+2. Restormer をセットアップして実行
 
 **Day 3** (評価):
-1. 5〜10 枚の代表的な鉛筆スケッチで全モデルを実行
+1. 5〜10 枚の代表的な鉛筆スケッチで全4モデルを実行
 2. 横並び比較画像を生成
 3. 「鉛筆ノイズがどの程度除去されるか」「線が痩せたり消えたりしないか」を目視評価
 
@@ -414,7 +425,7 @@ python scripts/make_comparison_grid.py --inputs $INPUT_DIR --results $RESULTS
 
 ここから先のステップ:
 
-1. **最も筋の良いモデルを 1〜2 つ選定** (おそらく SCUNet か NAFNet)
+1. **最も筋の良いモデルを 1〜2 つ選定** (おそらく SCUNet か Restormer)
 2. **マスク方式にファインチューニング**: 出力層を sigmoid + 1ch に差し替え、手続き的合成データで再学習
 3. **損失関数を BCE + Dice + Perceptual (Simo-Serra 特徴) に変更**
 4. **本格プロジェクト (Pix2Pix) との比較ベースラインとして位置づけ**
@@ -425,19 +436,14 @@ python scripts/make_comparison_grid.py --inputs $INPUT_DIR --results $RESULTS
 
 ### CUDA Out of Memory
 
-- Restormer の場合: `--tile 512 --tile_overlap 32` でタイル推論
-- NAFNet の場合: width32 版に切り替え、または独自タイル分割実装
+- Restormer の場合: `--tile 512`（デフォルト）でタイル推論。さらに厳しければ `--tile 256`
+- SCUNet の場合: architecture 内部で 64px padding を行うため、大きい画像は単純に VRAM が足りなくなる。その場合は手動でタイル分割が必要
 - バッチサイズを 1 に固定
-
-### 依存関係の衝突
-
-- NAFNet と Restormer は `basicsr` の異なるバージョンを要求することがある
-- その場合は環境を分ける: `conda create -n denoiser_nafnet ...` と `denoiser_restormer ...`
 
 ### グレースケール 3ch 複製での性能劣化
 
-- 自然画像のカラー情報前提で学習されたモデル (NAFNet, Restormer, SCUNet) では、グレースケールを 3ch 複製しても性能はほぼ保たれる (各チャンネルが同じ情報なので、3ch を平均してグレースケールに戻すだけ)
-- ただし内部のチャンネル別正規化やクロスチャンネル特徴抽出の効果は失われるため、ネイティブ 1ch モデル (DnCNN, FFDNet) と直接比較すると不公平になり得る
+- Restormer `Real_Denoising` と SCUNet color モデルはカラー3ch入力前提で学習されているが、グレースケールを 3ch 複製した場合でも性能はほぼ保たれる（各チャンネルが同じ情報のため）
+- ネイティブ 1ch モデル（DnCNN, FFDNet, Restormer Gaussian Gray, SCUNet gray）との直接比較は条件が異なる点に注意
 
 ### Google Drive ダウンロードの失敗
 
