@@ -114,11 +114,16 @@ def denoise_image(model, img_path, task, tile_size, device):
         x = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)  # (1,3,H,W)
 
     _, _, h, w = x.shape
-    if tile_size and (h > tile_size or w > tile_size):
-        out = tile_inference(model, x, tile_size, tile_overlap=32, device=device)
-    else:
-        with torch.no_grad():
-            out = model(x.to(device)).cpu()
+    try:
+        if tile_size and (h > tile_size or w > tile_size):
+            out = tile_inference(model, x, tile_size, tile_overlap=32, device=device)
+        else:
+            with torch.no_grad():
+                out = model(x.to(device)).cpu()
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        print(f'  [OOM] {os.path.basename(img_path)} skipped. Try --tile with a smaller value.')
+        return None
 
     out = out.squeeze().numpy().clip(0, 1) * 255
     if cfg['grayscale']:
@@ -173,6 +178,8 @@ def main():
         t0 = time.time()
         out = denoise_image(model, img_path, args.task, tile_size, device)
         elapsed = time.time() - t0
+        if out is None:
+            continue
         Image.fromarray(out).save(out_path)
         print(f'  {os.path.basename(img_path)} -> {os.path.basename(out_path)}  ({elapsed:.2f}s)')
 

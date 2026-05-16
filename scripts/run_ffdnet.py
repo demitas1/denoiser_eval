@@ -41,8 +41,13 @@ def denoise_image(model, img_path, sigma_val, device):
     img = np.array(Image.open(img_path).convert('L'), dtype=np.float32) / 255.0
     x = torch.from_numpy(img).unsqueeze(0).unsqueeze(0).to(device)  # (1,1,H,W)
     sigma = torch.full((1, 1, 1, 1), sigma_val / 255.0, dtype=torch.float32).to(device)
-    with torch.no_grad():
-        y = model(x, sigma)
+    try:
+        with torch.no_grad():
+            y = model(x, sigma)
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        print(f'  [OOM] {os.path.basename(img_path)} sigma={sigma_val} skipped.')
+        return None
     out = y.squeeze().cpu().numpy().clip(0, 1) * 255
     return out.astype(np.uint8)
 
@@ -95,6 +100,8 @@ def main():
             t0 = time.time()
             out = denoise_image(model, img_path, sigma_val, device)
             elapsed = time.time() - t0
+            if out is None:
+                continue
             out_path = os.path.join(output_dir, f'{basename}_ffdnet_s{sigma_val:02d}.png')
             Image.fromarray(out).save(out_path)
             print(f'  sigma={sigma_val:2d}  {os.path.basename(img_path)} -> {os.path.basename(out_path)}  ({elapsed:.2f}s)')

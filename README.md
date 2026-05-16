@@ -51,6 +51,25 @@ git clone https://github.com/cszn/KAIR.git models/KAIR
 
 ---
 
+## 一括実行
+
+DnCNN / FFDNet / Restormer（全タスク）/ SCUNet（主要4モデル）を1コマンドで実行します。
+
+```bash
+cd /path/to/denoiser_eval
+
+python scripts/run_all.py
+```
+
+完了後にサマリーテーブル（各モデルの処理時間・成否）が表示されます。
+
+| オプション | 説明 |
+|---|---|
+| `--input` | 入力ディレクトリ（デフォルト: `test_inputs/`） |
+| `--cpu` | 全モデルを CPU 推論で実行 |
+
+---
+
 ## DnCNN の実行
 
 ### 1. モデル重みのダウンロード
@@ -262,4 +281,5 @@ python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr
 | `--output` | `results/SCUNet` | 出力ディレクトリ |
 | `--model` | `scunet_color_real_psnr` | モデル名（複数指定可） |
 | `--model_zoo` | `models/SCUNet/model_zoo` | 重みディレクトリ |
+| `--tile` | `512` | タイルサイズ（0 で無効化）。大画像で VRAM 不足の場合は小さくする |
 | `--cpu` | off | CPU 推論を強制 |

@@ -34,8 +34,13 @@ def load_model(model_path, device):
 def denoise_image(model, img_path, device):
     img = np.array(Image.open(img_path).convert('L'), dtype=np.float32) / 255.0
     x = torch.from_numpy(img).unsqueeze(0).unsqueeze(0).to(device)  # (1,1,H,W)
-    with torch.no_grad():
-        y = model(x)
+    try:
+        with torch.no_grad():
+            y = model(x)
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        print(f'  [OOM] {os.path.basename(img_path)} skipped.')
+        return None
     out = y.squeeze().cpu().numpy().clip(0, 1) * 255
     return out.astype(np.uint8)
 
@@ -85,6 +90,8 @@ def main():
         t0 = time.time()
         out = denoise_image(model, img_path, device)
         elapsed = time.time() - t0
+        if out is None:
+            continue
 
         basename = os.path.splitext(os.path.basename(img_path))[0]
         out_path = os.path.join(output_dir, f'{basename}_dncnn.png')

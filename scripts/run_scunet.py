@@ -14,6 +14,9 @@ sys.path 追加でインストール不要。
 
   # 複数モデルを指定
   python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr scunet_gray_25
+
+  # VRAM が厳しい場合はタイルサイズを小さく（デフォルト 512）
+  python scripts/run_scunet.py --input test_inputs/ --tile 256
 """
 
 import argparse
@@ -43,6 +46,27 @@ MODEL_CONFIGS = {
 }
 
 
+def tile_inference(model, x, tile_size, tile_overlap, device):
+    """タイル分割推論。VRAM 節約のため大きい画像を分割して処理する。"""
+    b, c, h, w = x.shape
+    stride = tile_size - tile_overlap
+    h_idx = list(range(0, h - tile_size, stride)) + [h - tile_size]
+    w_idx = list(range(0, w - tile_size, stride)) + [w - tile_size]
+
+    E = torch.zeros_like(x)
+    W = torch.zeros_like(x)
+
+    for hi in h_idx:
+        for wi in w_idx:
+            patch = x[:, :, hi:hi+tile_size, wi:wi+tile_size].to(device)
+            with torch.no_grad():
+                out = model(patch)
+            E[:, :, hi:hi+tile_size, wi:wi+tile_size] += out.cpu()
+            W[:, :, hi:hi+tile_size, wi:wi+tile_size] += 1
+
+    return E / W
+
+
 def load_model(model_path, in_nc, device):
     model = net(in_nc=in_nc, config=[4, 4, 4, 4, 4, 4, 4], dim=64)
     model.load_state_dict(torch.load(model_path, map_location=device), strict=True)
@@ -52,22 +76,31 @@ def load_model(model_path, in_nc, device):
     return model.to(device)
 
 
-def denoise_image(model, img_path, in_nc, device):
+def denoise_image(model, img_path, in_nc, tile_size, device):
     img = Image.open(img_path)
 
     if in_nc == 1:
         img = img.convert('L')
         arr = np.array(img, dtype=np.float32) / 255.0
-        x = torch.from_numpy(arr).unsqueeze(0).unsqueeze(0).to(device)  # (1,1,H,W)
+        x = torch.from_numpy(arr).unsqueeze(0).unsqueeze(0)  # (1,1,H,W)
     else:
         img = img.convert('RGB')
         arr = np.array(img, dtype=np.float32) / 255.0
-        x = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)  # (1,3,H,W)
+        x = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)  # (1,3,H,W)
 
-    with torch.no_grad():
-        y = model(x)
+    _, _, h, w = x.shape
+    try:
+        if tile_size and (h > tile_size or w > tile_size):
+            out_t = tile_inference(model, x, tile_size, tile_overlap=32, device=device)
+        else:
+            with torch.no_grad():
+                out_t = model(x.to(device)).cpu()
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        print(f'  [OOM] {os.path.basename(img_path)} skipped. Try --tile with a smaller value.')
+        return None
 
-    out = y.squeeze().cpu().numpy().clip(0, 1) * 255
+    out = out_t.squeeze().numpy().clip(0, 1) * 255
     if in_nc == 1:
         return out.astype(np.uint8)
     else:
@@ -99,11 +132,14 @@ def main():
                         choices=list(MODEL_CONFIGS.keys()), help='Model name(s)')
     parser.add_argument('--model_zoo', default='models/SCUNet/model_zoo',
                         help='Path to model_zoo directory')
+    parser.add_argument('--tile', type=int, default=512,
+                        help='Tile size for large images (0 to disable)')
     parser.add_argument('--cpu', action='store_true', help='Force CPU inference')
     args = parser.parse_args()
 
     device = torch.device('cpu' if args.cpu or not torch.cuda.is_available() else 'cuda')
-    print(f'Device: {device}  Models: {args.model}')
+    tile_size = args.tile if args.tile > 0 else None
+    print(f'Device: {device}  Models: {args.model}  Tile: {tile_size}')
 
     root = os.path.join(os.path.dirname(__file__), '..')
     model_zoo = os.path.join(root, args.model_zoo) if not os.path.isabs(args.model_zoo) else args.model_zoo
@@ -126,8 +162,10 @@ def main():
             basename = os.path.splitext(os.path.basename(img_path))[0]
             out_path = os.path.join(output_dir, f'{basename}_scunet_{model_name}.png')
             t0 = time.time()
-            out = denoise_image(model, img_path, in_nc, device)
+            out = denoise_image(model, img_path, in_nc, tile_size, device)
             elapsed = time.time() - t0
+            if out is None:
+                continue
             Image.fromarray(out).save(out_path)
             print(f'  {model_name}  {os.path.basename(img_path)} -> {os.path.basename(out_path)}  ({elapsed:.2f}s)')
             total += 1
