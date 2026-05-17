@@ -40,6 +40,8 @@ MODEL_CONFIGS = {
     'scunet_color_15':        (3, False),
     'scunet_color_25':        (3, False),
     'scunet_color_50':        (3, False),
+    'scunet_gray_5':          (1, True),
+    'scunet_gray_10':         (1, True),
     'scunet_gray_15':         (1, True),
     'scunet_gray_25':         (1, True),
     'scunet_gray_50':         (1, True),

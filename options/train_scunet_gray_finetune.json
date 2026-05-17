@@ -1,0 +1,17 @@
+{
+  "sigma": 10,
+  "sigma_test": 10,
+  "n_channels": 1,
+  "patch_size": 64,
+  "batch_size": 32,
+  "lr": 5e-5,
+  "lr_milestones": [50000, 80000],
+  "lr_gamma": 0.5,
+  "total_iters": 100000,
+  "checkpoint_save": 10000,
+  "checkpoint_test": 5000,
+  "dataroot_train": "trainsets/trainH_BSD400",
+  "dataroot_test": "models/KAIR/testsets/bsd68",
+  "pretrained": "models/SCUNet/model_zoo/scunet_gray_15.pth",
+  "output_dir": "results/train_scunet_gray"
+}

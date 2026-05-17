@@ -8,6 +8,9 @@ results/
 # テスト入力画像（大容量バイナリ）
 test_inputs/
 
+# 学習データセット（大容量バイナリ）
+trainsets/
+
 # セッション固有ファイル
 claude-resume.sh
 
