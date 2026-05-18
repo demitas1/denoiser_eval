@@ -249,7 +249,7 @@ cd /path/to/denoiser_eval
 # 実世界ノイズ（PSNR版、デフォルト）
 python scripts/run_scunet.py --input test_inputs/ --output results/SCUNet
 
-# 実世界ノイズ（GAN版）
+# 実世界ノイズ（GAN版）※ 敵対学習により出力がシャープになるが、存在しない線の捏造（hallucination）が起こりやすい
 python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_gan
 
 # グレースケール3強度を一括出力
@@ -283,3 +283,80 @@ python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr
 | `--model_zoo` | `models/SCUNet/model_zoo` | 重みディレクトリ |
 | `--tile` | `512` | タイルサイズ（0 で無効化）。大画像で VRAM 不足の場合は小さくする |
 | `--cpu` | off | CPU 推論を強制 |
+
+---
+
+## SCUNet gray sigma=10 モデルの学習
+
+公式配布モデルは sigma=15/25/50 の 3 種のみ。鉛筆スケッチに最適な sigma=10 相当のモデルを `scunet_gray_15` から fine-tuning で作成する手順です。
+
+### 1. データ準備（初回のみ）
+
+BSD400（学習用 400 枚）と BSD68（検証用 68 枚）を同一リポジトリから取得します。
+
+```bash
+cd /path/to/denoiser_eval
+
+git clone --depth 1 --filter=blob:none --sparse \
+  https://github.com/smartboy110/denoising-datasets.git /tmp/ds_tmp
+cd /tmp/ds_tmp && git sparse-checkout set BSD400 BSD68/original
+mkdir -p trainsets/trainH_BSD400 models/KAIR/testsets/bsd68
+cp BSD400/*.png trainsets/trainH_BSD400/
+cp BSD68/original/*.png models/KAIR/testsets/bsd68/
+cd /tmp && rm -rf ds_tmp
+```
+
+### 2. 試験実行（所要時間の確認）
+
+1,000 イテレーション（約 7 分）だけ実行して速度を確認します。
+
+```bash
+cd /path/to/denoiser_eval
+
+python scripts/train_scunet_gray.py \
+    --config options/train_scunet_gray_finetune.json \
+    --max_iters 1000
+```
+
+表示される `eta=` の値から本番実行の所要時間を見積もれます（RTX 3060 で 100k iters ≈ 11 時間）。
+
+### 3. 本番 fine-tuning
+
+```bash
+# 100k イテレーション（約 11 時間、放置実行）
+python scripts/train_scunet_gray.py \
+    --config options/train_scunet_gray_finetune.json
+
+# 中断後の再開
+python scripts/train_scunet_gray.py \
+    --config options/train_scunet_gray_finetune.json \
+    --resume results/train_scunet_gray/iter_010000.pth
+```
+
+学習中は 5,000 イテレーションごとに BSD68 で PSNR を評価し、最良モデルを `results/train_scunet_gray/best.pth` に保存します。
+
+### 4. 学習済みモデルの配置と推論
+
+```bash
+cp results/train_scunet_gray/best.pth models/SCUNet/model_zoo/scunet_gray_10.pth
+
+# gray_10 と gray_15 を並べて比較
+python scripts/run_scunet.py \
+    --input test_inputs/ \
+    --model scunet_gray_10 scunet_gray_15
+```
+
+### オプション
+
+| 引数 | デフォルト | 説明 |
+|---|---|---|
+| `--config` | （必須） | JSON 設定ファイルのパス |
+| `--max_iters` | — | イテレーション数を上書き（試験実行用） |
+| `--resume` | — | チェックポイントから再開（optimizer 状態も復元） |
+
+利用可能な設定ファイル:
+
+| ファイル | 用途 |
+|---|---|
+| `options/train_scunet_gray_finetune.json` | sigma=10, lr=5e-5, 100k iters（**推奨**） |
+| `options/train_scunet_gray_full.json` | sigma=10, lr=1e-4, 300k iters（ランダム初期化） |

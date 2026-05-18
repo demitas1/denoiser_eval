@@ -24,6 +24,7 @@ RESTORMER_TASKS = [
 
 SCUNET_MODELS = [
     'scunet_color_real_psnr',
+    # 'scunet_color_real_gan',  # GAN版（シャープだが捏造リスクあり、必要時にコメント解除）
     'scunet_gray_15',
     'scunet_gray_25',
     'scunet_gray_50',
