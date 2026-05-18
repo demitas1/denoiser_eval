@@ -286,6 +286,81 @@ python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr
 
 ---
 
+## ESRGAN / BSRGAN の実行
+
+超解像モデル。入力画像を x2 または x4 にアップスケールする。デフォルトでアップスケール済み画像に加えて元サイズへ LANCZOS でダウンスケールした画像も保存されるため、デノイザ出力と直接比較しやすい。
+
+### 1. モデル重みのダウンロード
+
+```bash
+cd models/KAIR
+
+# BSRGAN / BSRNet / BSRGANx2
+python main_download_pretrained_models.py --models "BSRGAN"
+
+# ESRGAN（"others" キーに含まれる。他のモデルも一緒にダウンロードされる）
+python main_download_pretrained_models.py --models "others"
+```
+
+### 2. 推論の実行
+
+```bash
+cd /path/to/denoiser_eval
+
+# BSRGAN x4（GAN版、実世界劣化に強い、デフォルト）
+# → sketch_BSRGAN_x4.png（4096²）と sketch_BSRGAN_lanczos.png（元サイズ）の2ファイルが生成される
+python scripts/run_esrgan.py --input test_inputs/ --output results/ESRGAN
+
+# BSRNet x4（PSNR版、GAN版より安全）
+python scripts/run_esrgan.py --input test_inputs/ --model BSRNet
+
+# 複数モデルを一括実行
+python scripts/run_esrgan.py --input test_inputs/ --model BSRGAN BSRNet
+
+# ESRGAN x4（古典的 GAN 版）
+python scripts/run_esrgan.py --input test_inputs/ --model ESRGAN
+
+# BSRGANx2（×2 アップスケール）
+python scripts/run_esrgan.py --input test_inputs/ --model BSRGANx2
+
+# アップスケール済み画像のみ保存（ダウンスケールしない）
+python scripts/run_esrgan.py --input test_inputs/ --downscale none
+```
+
+出力は `results/ESRGAN/` に保存されます。ファイル名の例（BSRGAN x4、元サイズ 1024²）:
+
+| ファイル名 | サイズ | 説明 |
+|---|---|---|
+| `sketch_BSRGAN_x4.png` | 4096² | アップスケール済み |
+| `sketch_BSRGAN_lanczos.png` | 1024²（元サイズ） | LANCZOS でダウンスケール済み |
+
+### モデルの選択指針
+
+| モデル | スケール | 学習ロス | 特性 |
+|---|---|---|---|
+| `BSRGAN` | ×4 | GAN | 実世界劣化合成データで学習。シャープだが捏造リスクあり |
+| `BSRNet` | ×4 | PSNR (L1) | BSRGAN の PSNR 版。安全だが出力がやや滑らか |
+| `BSRGANx2` | ×2 | GAN | BSRGAN の ×2 版 |
+| `ESRGAN` | ×4 | GAN | 古典的 ESRGAN。鮮明だが BSRGAN より実世界劣化への汎化が弱い |
+
+鉛筆スケッチには **BSRNet から先に試す** のが妥当（捏造リスク低）。
+
+### オプション
+
+| 引数 | デフォルト | 説明 |
+|---|---|---|
+| `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
+| `--output` | `results/ESRGAN` | 出力ディレクトリ |
+| `--model` | `BSRGAN` | モデル名（複数指定可） |
+| `--model_zoo` | `models/KAIR/model_zoo` | 重みディレクトリ |
+| `--tile` | `512` | タイルサイズ（0 で無効化）。大画像で VRAM 不足の場合は小さくする |
+| `--downscale` | `lanczos` | アップスケール後に元サイズへ戻すアルゴリズム。`lanczos` / `bicubic` / `bilinear` / `nearest` / `none`（無効化） |
+| `--cpu` | off | CPU 推論を強制 |
+
+> **VRAM メモ（RTX 3060 12GB）**: 1024² 入力を x4 すると出力が 4096² になるため、`--tile 512` のタイル推論を推奨。OOM 発生時は該当画像をスキップして処理を継続する。
+
+---
+
 ## SCUNet gray sigma=10 モデルの学習
 
 公式配布モデルは sigma=15/25/50 の 3 種のみ。鉛筆スケッチに最適な sigma=10 相当のモデルを `scunet_gray_15` から fine-tuning で作成する手順です。
