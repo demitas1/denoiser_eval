@@ -302,6 +302,47 @@ python scripts/train_bsrgan_gan.py \
 
 ---
 
+## 学習途中チェックポイントでの推論
+
+`scripts/run_bsrnet_custom.py` で任意の `.pth` を指定して SR 推論を実行できる。
+フルチェックポイント（`iter_*.pth`）と state_dict のみ（`best.pth` / `last_E.pth`）の両方に対応。
+
+### 出力
+
+デフォルトではダウンスケール版（元解像度）のみ保存。`--save_upscaled` で x4 版も追加保存。
+
+| ファイル名例 | 内容 |
+|---|---|
+| `img_bsrnet_step012000_lanczos.png` | SR → LANCZOS ダウンスケール（元サイズ）|
+| `img_bsrnet_step012000_x4.png` | x4 アップスケール版（`--save_upscaled` 時のみ）|
+| `img_bsrnet_custom_lanczos.png` | `best.pth` / `last_E.pth` 使用時（step 不明）|
+
+### コマンド
+
+```bash
+# best.pth（PSNR 最良の EMA 重み）で推論
+python scripts/run_bsrnet_custom.py \
+    --checkpoint results/train_bsrgan_psnr/best.pth \
+    --input test_inputs/ --output results/bsrnet_custom/
+
+# 特定ステップのフルチェックポイントで推論
+python scripts/run_bsrnet_custom.py \
+    --checkpoint results/train_bsrgan_psnr/iter_012000.pth \
+    --input test_inputs/ --output results/bsrnet_custom/
+
+# x4 アップスケール版も保存
+python scripts/run_bsrnet_custom.py \
+    --checkpoint results/train_bsrgan_psnr/best.pth \
+    --input test_inputs/ --save_upscaled
+
+# ダウンスケールアルゴリズムを変更（lanczos / bicubic / bilinear / nearest）
+python scripts/run_bsrnet_custom.py \
+    --checkpoint results/train_bsrgan_psnr/best.pth \
+    --input test_inputs/ --downscale bicubic
+```
+
+---
+
 ## 実装優先順位
 
 1. **idx 12（圧力ムラ）** — 実装が最もシンプル、効果が明確
