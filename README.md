@@ -474,28 +474,59 @@ sed -i \
 
 ### 3. データ準備（初回のみ）
 
-DIV2K（800 枚）と Flickr2K（2,650 枚）の合計 3,450 枚の HR 画像を `trainsets/trainH/` に配置します。
+HR 画像は **データセットごとにサブディレクトリを分けて** 配置します。学習時に `--datasets` で使用するデータセットを選択できます。
 
-#### DIV2K（公式サイトから直接ダウンロード）
+```
+trainsets/trainH/
+  unsplash_lite/   ← Unsplash Lite（スクリプトで自動取得）
+  div2k/           ← DIV2K（手動）
+  flickr2k/        ← Flickr2K（手動）
+  custom/          ← 独自データ（任意）
+```
+
+#### Unsplash Lite（推奨・自動ダウンロード）
+
+Unsplash Lite は自然風景写真 25,000 枚の商用利用可能なデータセットです。メタデータ zip（`unsplash-research-dataset-lite-latest.zip`）を[公式リポジトリ](https://github.com/unsplash/datasets)からダウンロード後、以下を実行します。
 
 ```bash
-cd /path/to/denoiser_eval
-mkdir -p trainsets/trainH
+# zip をプロジェクトルートに置いてから:
+unzip unsplash-research-dataset-lite-latest.zip -d trainsets/unsplash_lite_meta/
 
+# 画像をダウンロード（デフォルト: 1024px 以上を最大 2,000 枚）
+python scripts/download_unsplash_lite.py
+
+# 枚数を絞る場合
+python scripts/download_unsplash_lite.py --max_images 500
+
+# 中断後は再実行するだけで続きから再開（ダウンロード済みをスキップ）
+```
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `--max_images` | `2000` | 最大ダウンロード枚数（0 で無制限） |
+| `--min_size` | `1024` | 最小解像度（px）フィルタ |
+| `--download_width` | `1080` | ダウンロード画像の幅（Unsplash 動的リサイズ） |
+| `--delay` | `0.5` | リクエスト間隔（秒） |
+
+#### DIV2K（手動ダウンロード）
+
+```bash
 # HR 学習画像（zip 約 3.3 GB）
 wget -P /tmp/ https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_train_HR.zip
 unzip /tmp/DIV2K_train_HR.zip -d /tmp/div2k/
-cp /tmp/div2k/DIV2K_train_HR/*.png trainsets/trainH/
+mkdir -p trainsets/trainH/div2k
+cp /tmp/div2k/DIV2K_train_HR/*.png trainsets/trainH/div2k/
 rm -rf /tmp/div2k/ /tmp/DIV2K_train_HR.zip
 ```
 
-#### Flickr2K（EDSR 公式ミラーから）
+#### Flickr2K（手動ダウンロード）
 
 ```bash
-# tar 約 19 GB。ダウンロードに時間がかかります
+# tar 約 19 GB
 wget -P /tmp/ https://cv.snu.ac.kr/research/EDSR/Flickr2K.tar
 tar -xf /tmp/Flickr2K.tar -C /tmp/
-cp /tmp/Flickr2K/Flickr2K_HR/*.png trainsets/trainH/
+mkdir -p trainsets/trainH/flickr2k
+cp /tmp/Flickr2K/Flickr2K_HR/*.png trainsets/trainH/flickr2k/
 rm -rf /tmp/Flickr2K/ /tmp/Flickr2K.tar
 ```
 
@@ -504,7 +535,9 @@ rm -rf /tmp/Flickr2K/ /tmp/Flickr2K.tar
 #### 配置確認
 
 ```bash
-ls trainsets/trainH/ | wc -l   # 3450 前後であれば OK
+ls trainsets/trainH/unsplash_lite/ | wc -l   # ダウンロード枚数
+ls trainsets/trainH/div2k/         | wc -l   # 800
+ls trainsets/trainH/flickr2k/      | wc -l   # 2650
 ```
 
 ### 4. 試験実行（100 iters）
@@ -514,9 +547,11 @@ GPU メモリと劣化パイプラインの動作確認を兼ねて短縮実行�
 ```bash
 cd /path/to/denoiser_eval
 
+# Unsplash Lite のみ使用
 python scripts/train_bsrgan_gan.py \
     --config options/train_bsrgan_x4_gan_finetune.json \
-    --max_iters 100
+    --max_iters 100 \
+    --datasets unsplash_lite
 ```
 
 正常終了すると以下のようなログが出力されます:
@@ -530,7 +565,17 @@ last_E.pth saved to results/train_bsrgan_gan
 ### 5. 本番 GAN fine-tuning
 
 ```bash
-# 400k イテレーション（RTX 3060 で約 66 時間、RTX 3090 で約 58 時間）
+# Unsplash Lite のみ（400k iters）
+python scripts/train_bsrgan_gan.py \
+    --config options/train_bsrgan_x4_gan_finetune.json \
+    --datasets unsplash_lite
+
+# 複数データセットを混合
+python scripts/train_bsrgan_gan.py \
+    --config options/train_bsrgan_x4_gan_finetune.json \
+    --datasets unsplash_lite div2k flickr2k
+
+# --datasets 未指定 → trainsets/trainH/ 以下を全て使用
 python scripts/train_bsrgan_gan.py \
     --config options/train_bsrgan_x4_gan_finetune.json
 ```
@@ -541,6 +586,7 @@ python scripts/train_bsrgan_gan.py \
 # 中断後の再開
 python scripts/train_bsrgan_gan.py \
     --config options/train_bsrgan_x4_gan_finetune.json \
+    --datasets unsplash_lite \
     --resume results/train_bsrgan_gan/iter_005000.pth
 ```
 
@@ -573,6 +619,7 @@ python scripts/run_esrgan.py \
 | `--config` | （必須） | JSON 設定ファイルのパス |
 | `--max_iters` | — | イテレーション数を上書き（試験実行用） |
 | `--resume` | — | チェックポイントから再開（G/D/E/optimizer/scheduler を完全復元） |
+| `--datasets` | — | 使用するデータセット名（`trainsets/trainH/` 以下のサブディレクトリ名）。未指定で全サブディレクトリを使用 |
 
 設定ファイル `options/train_bsrgan_x4_gan_finetune.json` の主なパラメータ:
 
@@ -608,7 +655,7 @@ BSRGAN の劣化パイプラインは LR 画像を学習中に on-the-fly で合
 
 BSRNet.pth は自然画像で学習済みのため、clean な ink line art を少量追加するだけでドメイン適応できます。
 
-**推奨構成（混合戦略）**: DIV2K 800 枚 + 独自線画 200〜500 枚を混在させると、汎用劣化への耐性を保ちつつドメイン品質が向上します。
+**推奨構成（混合戦略）**: Unsplash Lite または DIV2K を汎用ベースとし、独自線画 200〜500 枚を `trainsets/trainH/custom/` に追加して `--datasets unsplash_lite custom` のように混合するとドメイン品質が向上します。
 
 独自データを用意する際のポイント:
 
@@ -618,10 +665,10 @@ BSRNet.pth は自然画像で学習済みのため、clean な ink line art を�
 
 ```bash
 # ImageMagick でグレースケール PNG を RGB に一括変換
-mogrify -colorspace sRGB -type TrueColor trainsets/trainH/*.png
+mogrify -colorspace sRGB -type TrueColor trainsets/trainH/custom/*.png
 ```
 
-> **DIV2K 以外の代替データセット**: Unsplash Lite（2.5 万枚、CC0）、OST（Outdoor Scenes）なども同等に使用できます。
+> **その他の代替データセット**: OST（Outdoor Scenes）なども `trainsets/trainH/<name>/` に配置すれば `--datasets` で指定できます。
 
 ---
 

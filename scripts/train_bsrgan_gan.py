@@ -20,6 +20,18 @@ GAN では PSNR と知覚品質の相関が低いため best.pth は保存せず
       --config options/train_bsrgan_x4_gan_finetune.json \
       --resume results/train_bsrgan_gan/iter_005000.pth
 
+  # 特定データセットのみ使用（trainsets/trainH/<name>/ を指定）
+  python scripts/train_bsrgan_gan.py \
+      --config options/train_bsrgan_x4_gan_finetune.json \
+      --datasets unsplash_lite
+
+  # 複数データセットを指定
+  python scripts/train_bsrgan_gan.py \
+      --config options/train_bsrgan_x4_gan_finetune.json \
+      --datasets unsplash_lite div2k flickr2k
+
+  # --datasets 未指定時は dataroot_H 以下を全て使用（デフォルト）
+
 【学習完了後】
   cp results/train_bsrgan_gan/last_E.pth models/KAIR/model_zoo/BSRGAN_custom.pth
 """
@@ -82,6 +94,9 @@ def main():
                         help='Override total_iters (for quick test)')
     parser.add_argument('--resume', default=None,
                         help='Resume from checkpoint (iter_XXXXXX.pth)')
+    parser.add_argument('--datasets', nargs='+', default=None,
+                        help='Dataset subdirectory names under dataroot_H to use '
+                             '(e.g. unsplash_lite div2k). Default: use all subdirectories.')
     args = parser.parse_args()
 
     config_path = args.config if os.path.isabs(args.config) else os.path.join(ROOT, args.config)
@@ -102,9 +117,19 @@ def main():
     def abs_path(p):
         return p if os.path.isabs(p) else os.path.join(ROOT, p)
 
-    train_dir = abs_path(opt['dataroot_H'])
-    test_dir  = abs_path(opt['dataroot_test'])
-    print(f'Train data: {train_dir}')
+    base_train_dir = abs_path(opt['dataroot_H'])
+    test_dir       = abs_path(opt['dataroot_test'])
+
+    if args.datasets:
+        train_dir = [os.path.join(base_train_dir, name) for name in args.datasets]
+        missing = [d for d in train_dir if not os.path.isdir(d)]
+        if missing:
+            print(f'Error: dataset directories not found: {missing}')
+            sys.exit(1)
+        print(f'Train data: {train_dir}')
+    else:
+        train_dir = base_train_dir
+        print(f'Train data: {train_dir} (all subdirectories)')
     print(f'Test  data: {test_dir}')
 
     ds_opt_train = {
