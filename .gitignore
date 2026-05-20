@@ -8,6 +8,9 @@ results/
 # テスト入力画像（大容量バイナリ）
 test_inputs/
 
+# 劣化可視化用入力画像
+degradation_inputs/
+
 # 学習データセット（大容量バイナリ）
 trainsets/
 
