@@ -1,6 +1,11 @@
 {
   "task": "train_bsrgan_x4_gan_finetune"
 
+  , "_pretrained_netG_options": {
+      "__usage__": "overwrite pth filename to pretrained_netG",
+      "official_bsrnet":  "models/KAIR/model_zoo/BSRNet.pth",
+      "unsplash_trained": "models/KAIR/model_zoo/BSRNet_unsplash.pth"
+    }
   , "pretrained_netG": "models/KAIR/model_zoo/BSRNet.pth"
   , "dataroot_H":      "trainsets/trainH"
   , "dataroot_test":   "models/KAIR/testsets/set5"

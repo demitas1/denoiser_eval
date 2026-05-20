@@ -1,4 +1,4 @@
-# 鉛筆スケッチ向けカスタム劣化パイプライン 設計プラン
+# BSRGAN カスタム学習プラン
 
 ## 目的
 
@@ -227,15 +227,78 @@ DatasetBlindSR は**画像単位**でランダム選択するため、枚数比�
 
 4096×4096 を 15〜20枚用意した場合、単純混合では効果が出ない。
 
-### 推奨: 2フェーズ学習
+### 推奨: 2フェーズ学習（GAN フェーズのみ）
 
-| フェーズ | `--datasets` 指定 | iters | 目的 |
-|---|---|---|---|
-| Phase 1 | `unsplash_lite` | 400k | 汎用劣化・超解像能力の獲得 |
-| Phase 2 | `custom` | 5k〜20k | インク線画ドメインへの適応 |
+公式 BSRNet.pth を PSNR 出発点として使う場合のフロー。
+
+| フェーズ | スクリプト | `--datasets` | iters | 目的 |
+|---|---|---|---|---|
+| Phase 1 | `train_bsrgan_gan.py` | `unsplash_lite` | 400k | 汎用劣化・超解像能力の獲得 |
+| Phase 2 | `train_bsrgan_gan.py` | `custom` | 5k〜20k | インク線画ドメインへの適応 |
 
 Phase 2 の 20k iters・batch_size=4 では 80,000 サンプルを抽出。
 15枚・実効パッチ 870 枚として各パッチを約 92 回学習することになり、ファインチューニングとして十分。
+
+---
+
+## BSRNet のゼロからの学習（商用利用時）
+
+### ライセンス上の問題
+
+公式 `BSRNet.pth` の学習データには商用利用不可のデータセットが含まれる。
+
+| データセット | 枚数 | ライセンス |
+|---|---|---|
+| DIV2K | 800 | 学術利用向け |
+| Flickr2K | 2,650 | 学術利用向け |
+| WED | 4,744 | **非商用学術利用のみ** |
+| FFHQ | 10,000 | **CC BY-NC-SA 4.0（非商用のみ）** |
+
+商用プロダクトへの組み込みには **Unsplash Lite 等の商用 OK データで PSNR フェーズから学習し直す**必要がある。
+
+### 学習フロー（PSNR → GAN）
+
+```
+[PSNR フェーズ]  train_bsrgan_psnr.py  → results/train_bsrgan_psnr/best.pth
+                      ↓
+              BSRNet_unsplash.pth として配置
+                      ↓
+[GAN フェーズ]   train_bsrgan_gan.py   → results/train_bsrgan_gan/last_E.pth
+                      ↓
+              BSRGAN_custom.pth として配置
+```
+
+### 時間見積もり（RTX 3060）
+
+| フェーズ | iters | 推定時間 | 備考 |
+|---|---|---|---|
+| PSNR（BSRNet） | 500k | 約 81 時間 | L1 損失のみ、D・VGG なし |
+| GAN（BSRGAN） | 400k | 約 110 時間 | D + VGG perceptual + LSGAN |
+| **合計** | **900k** | **約 190 時間（8 日）** | |
+
+Phase 2（インク画 fine-tuning）は別途 5k〜20k iters（約 1〜4 時間）。
+
+### コマンド
+
+```bash
+# Step 1: PSNR フェーズ（Unsplash Lite のみ）
+python scripts/train_bsrgan_psnr.py \
+    --config options/train_bsrgan_x4_psnr_unsplash.json \
+    --datasets unsplash_lite
+
+# Step 2: 成果物を配置
+cp results/train_bsrgan_psnr/best.pth models/KAIR/model_zoo/BSRNet_unsplash.pth
+
+# Step 3: GAN config の pretrained_netG を書き換える
+# options/train_bsrgan_x4_gan_finetune.json:
+#   "_pretrained_netG_options" キーに切替候補あり
+#   "pretrained_netG": "models/KAIR/model_zoo/BSRNet_unsplash.pth"  ← に変更
+
+# Step 4: GAN フェーズ
+python scripts/train_bsrgan_gan.py \
+    --config options/train_bsrgan_x4_gan_finetune.json \
+    --datasets unsplash_lite
+```
 
 ---
 

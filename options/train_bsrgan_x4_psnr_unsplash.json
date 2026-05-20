@@ -1,0 +1,27 @@
+{
+  "task": "train_bsrgan_x4_psnr_unsplash"
+
+  , "dataroot_H":    "trainsets/trainH"
+  , "dataroot_test": "models/KAIR/testsets/set5"
+  , "output_dir":    "results/train_bsrgan_psnr"
+
+  , "total_iters": 500000
+
+  , "H_size":       320
+  , "lq_patchsize":  72
+  , "sf":             4
+  , "n_channels":     3
+
+  , "batch_size":   4
+  , "num_workers":  8
+
+  , "G_lr": 1e-4
+  , "G_milestones": [200000, 400000]
+  , "lr_gamma": 0.5
+
+  , "E_decay": 0.999
+
+  , "checkpoint_save":  1000
+  , "checkpoint_test":  2000
+  , "checkpoint_print": 100
+}
