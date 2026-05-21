@@ -2,7 +2,7 @@
   "task": "train_bsrgan_x4_psnr_unsplash"
 
   , "dataroot_H":    "trainsets/trainH"
-  , "dataroot_test": "testsets/custom_natural"
+  , "dataroot_test": "testsets/custom_natural/pexels-cc0"
   , "output_dir":    "results/train_bsrgan_psnr"
 
   , "total_iters": 500000
