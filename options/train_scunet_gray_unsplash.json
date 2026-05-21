@@ -1,0 +1,19 @@
+{
+  "_license_note": "商用利用向け設定。訓練データは Unsplash Lite (CC0)。ただし pretrained は scunet_gray_15.pth（BSD400+WED で学習、非商用）を起点にしているため派生物の懸念あり。商用製品への組み込みには pretrained を null にしてゼロから学習すること（total_iters を 300k 以上に増やす）。",
+
+  "sigma": 10,
+  "sigma_test": 10,
+  "n_channels": 1,
+  "patch_size": 64,
+  "batch_size": 32,
+  "lr": 5e-5,
+  "lr_milestones": [50000, 80000],
+  "lr_gamma": 0.5,
+  "total_iters": 100000,
+  "checkpoint_save": 5000,
+  "checkpoint_test": 2500,
+  "dataroot_train": "trainsets/trainH",
+  "dataroot_test": "testsets/unsplash_lite_test",
+  "pretrained": "models/SCUNet/model_zoo/scunet_gray_15.pth",
+  "output_dir": "results/train_scunet_gray"
+}

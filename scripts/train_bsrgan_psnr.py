@@ -225,7 +225,7 @@ def main():
             netE.eval()
             netG.train()
             flag = ' *** best ***' if psnr > best_psnr else ''
-            print(f'  >> PSNR (EMA, Set5): {psnr:.2f} dB{flag}')
+            print(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB{flag}')
             if psnr > best_psnr:
                 best_psnr = psnr
                 torch.save(netE.state_dict(), os.path.join(output_dir, 'best.pth'))

@@ -296,7 +296,7 @@ def main():
             netE.eval()  # evaluate_psnr 内で eval に切り替えているが念のため維持
             netG.train()
             netD.train()
-            print(f'  >> PSNR (EMA, Set5): {psnr:.2f} dB  [reference only]')
+            print(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB  [reference only]')
 
         # --- チェックポイント保存 ---
         if opt['checkpoint_save'] > 0 and step % opt['checkpoint_save'] == 0 and step > 0:

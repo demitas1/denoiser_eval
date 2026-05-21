@@ -6,9 +6,9 @@
       "official_bsrnet":  "models/KAIR/model_zoo/BSRNet.pth",
       "unsplash_trained": "models/KAIR/model_zoo/BSRNet_unsplash.pth"
     }
-  , "pretrained_netG": "models/KAIR/model_zoo/BSRNet.pth"
+  , "pretrained_netG": "models/KAIR/model_zoo/BSRNet_unsplash.pth"
   , "dataroot_H":      "trainsets/trainH"
-  , "dataroot_test":   "models/KAIR/testsets/set5"
+  , "dataroot_test":   "testsets/custom_natural"
   , "output_dir":      "results/train_bsrgan_gan"
 
   , "total_iters": 400000

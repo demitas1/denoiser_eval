@@ -1,4 +1,6 @@
 {
+  "_license_note": "学術用途限定設定。訓練データ BSD400 および検証データ BSD68 は Berkeley Segmentation Dataset（非商用ライセンス）。商用利用には dataroot_train・dataroot_test を Unsplash Lite / custom_natural に差し替えた上で pretrained を null にして使用すること。",
+
   "sigma": 10,
   "sigma_test": 10,
   "n_channels": 1,

@@ -1,0 +1,26 @@
+{
+  "task": "train_ffdnet_gray_unsplash"
+
+  , "dataroot_H":    "trainsets/trainH"
+  , "dataroot_test": "testsets/unsplash_lite_test"
+  , "output_dir":    "results/train_ffdnet_gray"
+
+  , "total_iters": 500000
+
+  , "H_size":     64
+  , "n_channels":  1
+  , "sigma_min":   0
+  , "sigma_max":  75
+  , "sigma_test": 25
+
+  , "batch_size":  64
+  , "num_workers":  8
+
+  , "lr": 1e-4
+  , "lr_milestones": [200000, 400000]
+  , "lr_gamma": 0.5
+
+  , "checkpoint_save":  2000
+  , "checkpoint_test":  2000
+  , "checkpoint_print":  200
+}
