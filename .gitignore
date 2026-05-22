@@ -3,7 +3,10 @@
 models/*/
 
 # 推論結果（生成物、大容量バイナリ）
-results/
+results/*
+# カスタム学習済み重みは Git LFS で追跡（results/ を丸ごと除外するとネゲーションが効かない）
+!results/trained_models/
+!results/trained_models/*.pth
 
 # テスト入力画像（大容量バイナリ）
 test_inputs/
