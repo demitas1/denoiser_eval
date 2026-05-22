@@ -79,6 +79,9 @@ def main():
     parser.add_argument('--datasets', nargs='+', default=None,
                         help='Dataset subdirectory names under dataroot_H to use '
                              '(e.g. unsplash_lite). Default: use all subdirectories.')
+    parser.add_argument('--test_recursive', action='store_true',
+                        help='Include subdirectories when collecting test images '
+                             '(default: top-level only)')
     args = parser.parse_args()
 
     config_path = args.config if os.path.isabs(args.config) else os.path.join(ROOT, args.config)
@@ -138,6 +141,12 @@ def main():
 
     train_set = DatasetBlindSR(ds_opt_train)
     test_set  = DatasetBlindSR(ds_opt_test)
+    if not args.test_recursive:
+        test_set.paths_H = [p for p in test_set.paths_H if os.path.dirname(p) == test_dir]
+        if not test_set.paths_H:
+            print(f'Error: no images found in top-level of {test_dir}. '
+                  f'Use --test_recursive to include subdirectories.')
+            sys.exit(1)
     print(f'Train images: {len(train_set)}  Test images: {len(test_set)}')
 
     train_loader = DataLoader(
