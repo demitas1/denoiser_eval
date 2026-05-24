@@ -32,6 +32,8 @@ DEFAULT_GAUSSIAN_SIGMA  = [1.0]
 DEFAULT_MEDIAN_KSIZE    = [3]
 DEFAULT_BILATERAL_SIGMA = [10, 20, 30, 40]
 DEFAULT_NLMEANS_H       = [5, 10, 15, 20]
+DEFAULT_UPSCALE_FACTOR  = [4]
+DEFAULT_UPSCALE_METHODS = ['bicubic', 'lanczos']
 
 
 def collect_inputs(input_path):
@@ -56,9 +58,9 @@ def main():
     parser.add_argument('--input', required=True, help='Input image file or directory')
     parser.add_argument('--output', default='results/traditional', help='Output directory')
     parser.add_argument('--filters', nargs='+',
-                        choices=['gaussian', 'median', 'bilateral', 'nlmeans'],
+                        choices=['gaussian', 'median', 'bilateral', 'nlmeans', 'upscale', 'combine'],
                         default=['gaussian', 'median', 'bilateral', 'nlmeans'],
-                        help='Filters to run (default: all four)')
+                        help='Filters to run (default: gaussian median bilateral nlmeans)')
     parser.add_argument('--gaussian_sigma', type=float, nargs='+',
                         default=DEFAULT_GAUSSIAN_SIGMA,
                         help='Gaussian sigma values (default: 1.0)')
@@ -71,6 +73,22 @@ def main():
     parser.add_argument('--nlmeans_h', type=float, nargs='+',
                         default=DEFAULT_NLMEANS_H,
                         help='NL-Means filter strength h (default: 5 10 15 20)')
+    parser.add_argument('--upscale_factor', type=int, nargs='+',
+                        default=DEFAULT_UPSCALE_FACTOR,
+                        help='Upscale factor(s) (default: 4)')
+    parser.add_argument('--upscale_method', nargs='+',
+                        choices=['bicubic', 'lanczos'],
+                        default=DEFAULT_UPSCALE_METHODS,
+                        help='Upscale interpolation method(s) (default: bicubic lanczos); '
+                             'downscale is always Lanczos')
+    parser.add_argument('--combine_denoise', nargs='+',
+                        choices=['gaussian', 'median', 'bilateral', 'nlmeans'],
+                        default=['gaussian', 'median', 'bilateral', 'nlmeans'],
+                        help='Denoise stage(s) for combine mode (default: all four)')
+    parser.add_argument('--combine_upscale', nargs='+',
+                        choices=['bicubic', 'lanczos'],
+                        default=['bicubic', 'lanczos'],
+                        help='Upscale stage(s) for combine mode (default: bicubic lanczos)')
     args = parser.parse_args()
 
     output_dir = args.output if os.path.isabs(args.output) else os.path.join(ROOT, args.output)
@@ -125,6 +143,59 @@ def main():
                 out_path = os.path.join(output_dir, f'{basename}_nlmeans_h{int(h)}.png')
                 Image.fromarray(out).save(out_path)
                 total_saved += 1
+
+        if 'upscale' in filters:
+            _up_flags = {
+                'bicubic': cv2.INTER_CUBIC,
+                'lanczos': cv2.INTER_LANCZOS4,
+            }
+            h0, w0 = src.shape[:2]
+            for factor in args.upscale_factor:
+                for method in args.upscale_method:
+                    up = cv2.resize(src, (w0 * factor, h0 * factor),
+                                    interpolation=_up_flags[method])
+                    out = cv2.resize(up, (w0, h0), interpolation=cv2.INTER_LANCZOS4)
+                    out_path = os.path.join(
+                        output_dir, f'{basename}_upscale_x{factor}_{method}.png')
+                    Image.fromarray(out).save(out_path)
+                    total_saved += 1
+
+        if 'combine' in filters:
+            _up_flags = {
+                'bicubic': cv2.INTER_CUBIC,
+                'lanczos': cv2.INTER_LANCZOS4,
+            }
+            h0, w0 = src.shape[:2]
+
+            denoise_variants = []
+            if 'gaussian' in args.combine_denoise:
+                for sigma in args.gaussian_sigma:
+                    denoise_variants.append(
+                        (cv2.GaussianBlur(src, (0, 0), sigma), f'gaussian_s{sigma:.1f}'))
+            if 'median' in args.combine_denoise:
+                for ksize in median_ksizes:
+                    denoise_variants.append(
+                        (cv2.medianBlur(src, ksize), f'median_k{ksize}'))
+            if 'bilateral' in args.combine_denoise:
+                for sigma in args.bilateral_sigma:
+                    denoise_variants.append(
+                        (cv2.bilateralFilter(src, -1, sigma, sigma), f'bilateral_s{int(sigma)}'))
+            if 'nlmeans' in args.combine_denoise:
+                for h in args.nlmeans_h:
+                    denoise_variants.append(
+                        (cv2.fastNlMeansDenoising(src, None, h, 7, 21), f'nlmeans_h{int(h)}'))
+
+            for denoised, denoise_tag in denoise_variants:
+                for factor in args.upscale_factor:
+                    for method in args.combine_upscale:
+                        up = cv2.resize(denoised, (w0 * factor, h0 * factor),
+                                        interpolation=_up_flags[method])
+                        out = cv2.resize(up, (w0, h0), interpolation=cv2.INTER_LANCZOS4)
+                        out_path = os.path.join(
+                            output_dir,
+                            f'{basename}_combine_{denoise_tag}_{method}_x{factor}.png')
+                        Image.fromarray(out).save(out_path)
+                        total_saved += 1
 
         print(f'  {basename}')
 
