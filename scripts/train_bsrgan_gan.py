@@ -15,7 +15,7 @@ GAN では PSNR と知覚品質の相関が低いため best.pth は保存せず
   python scripts/train_bsrgan_gan.py \
       --config options/train_bsrgan_x4_gan_finetune.json
 
-  # チェックポイントから再開
+  # チェックポイントから再開（同じ config を使えばログは自動追記）
   python scripts/train_bsrgan_gan.py \
       --config options/train_bsrgan_x4_gan_finetune.json \
       --resume results/train_bsrgan_gan/iter_005000.pth
@@ -42,6 +42,7 @@ import math
 import os
 import sys
 import time
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -110,11 +111,22 @@ def main():
     output_dir = os.path.join(ROOT, opt['output_dir']) if not os.path.isabs(opt['output_dir']) else opt['output_dir']
     os.makedirs(output_dir, exist_ok=True)
 
+    config_stem = os.path.splitext(os.path.basename(config_path))[0]
+    log_path = os.path.join(output_dir, f'{config_stem}.log')
+
+    def log(msg):
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        line = f'[{ts}]  {msg}'
+        print(line)
+        with open(log_path, 'a', encoding='utf-8') as flog:
+            flog.write(line + '\n')
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
-    print(f'Config: {config_path}')
-    print(f'Total iters: {total_iters}')
-    print(f'Output: {output_dir}')
+    log(f'Device: {device}')
+    log(f'Config: {config_stem}')
+    log(f'Total iters: {total_iters}')
+    log(f'Output: {output_dir}')
+    log(f'Log: {log_path}')
 
     # --- データセット ---
     def abs_path(p):
@@ -127,13 +139,13 @@ def main():
         train_dir = [os.path.join(base_train_dir, name) for name in args.datasets]
         missing = [d for d in train_dir if not os.path.isdir(d)]
         if missing:
-            print(f'Error: dataset directories not found: {missing}')
+            log(f'Error: dataset directories not found: {missing}')
             sys.exit(1)
-        print(f'Train data: {train_dir}')
+        log(f'Train data: {train_dir}')
     else:
         train_dir = base_train_dir
-        print(f'Train data: {train_dir} (all subdirectories)')
-    print(f'Test  data: {test_dir}')
+        log(f'Train data: {train_dir} (all subdirectories)')
+    log(f'Test  data: {test_dir}')
 
     ds_opt_train = {
         'phase': 'train',
@@ -163,10 +175,10 @@ def main():
     if not args.test_recursive:
         test_set.paths_H = [p for p in test_set.paths_H if os.path.dirname(p) == test_dir]
         if not test_set.paths_H:
-            print(f'Error: no images found in top-level of {test_dir}. '
-                  f'Use --test_recursive to include subdirectories.')
+            log(f'Error: no images found in top-level of {test_dir}. '
+                f'Use --test_recursive to include subdirectories.')
             sys.exit(1)
-    print(f'Train images: {len(train_set)}  Test images: {len(test_set)}')
+    log(f'Train images: {len(train_set)}  Test images: {len(test_set)}')
 
     train_loader = DataLoader(
         train_set,
@@ -211,7 +223,7 @@ def main():
     # --- 重みロード ---
     if args.resume:
         resume_path = args.resume if os.path.isabs(args.resume) else os.path.join(ROOT, args.resume)
-        print(f'Resuming from {resume_path}')
+        log(f'Resuming from {resume_path}')
         ckpt = torch.load(resume_path, map_location=device)
         netG.load_state_dict(ckpt['netG'])
         netD.load_state_dict(ckpt['netD'])
@@ -221,13 +233,13 @@ def main():
         G_sch.load_state_dict(ckpt['G_scheduler'])
         D_sch.load_state_dict(ckpt['D_scheduler'])
         start_step = ckpt['step'] + 1
-        print(f'  Resumed at step={start_step}')
+        log(f'  Resumed at step={start_step}')
     else:
         pretrained_path = abs_path(opt['pretrained_netG'])
-        print(f'Loading pretrained netG: {pretrained_path}')
+        log(f'Loading pretrained netG: {pretrained_path}')
         netG.load_state_dict(torch.load(pretrained_path, map_location=device), strict=True)
         netE.load_state_dict(netG.state_dict())
-        print('  Pretrained weights loaded.')
+        log('  Pretrained weights loaded.')
 
     # --- 学習ループ ---
     netG.train()
@@ -235,7 +247,7 @@ def main():
     train_iter = iter(train_loader)
     t_start = time.time()
 
-    print(f'\n--- Training start (step {start_step} → {total_iters}) ---')
+    log(f'--- Training start (step {start_step} → {total_iters}) ---')
 
     for step in range(start_step, total_iters):
         try:
@@ -288,7 +300,7 @@ def main():
             elapsed = time.time() - t_start
             iters_done = step - start_step + 1
             eta = elapsed / iters_done * (total_iters - step - 1) if iters_done > 0 else 0
-            print(
+            log(
                 f'[{step:6d}/{total_iters}]'
                 f'  G={loss_G.item():.4f}'
                 f'  D={loss_D.item():.4f}'
@@ -305,7 +317,7 @@ def main():
             netE.eval()  # evaluate_psnr 内で eval に切り替えているが念のため維持
             netG.train()
             netD.train()
-            print(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB  [reference only]')
+            log(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB  [reference only]')
 
         # --- チェックポイント保存 ---
         if opt['checkpoint_save'] > 0 and step % opt['checkpoint_save'] == 0 and step > 0:
@@ -321,17 +333,16 @@ def main():
                 'D_scheduler': D_sch.state_dict(),
             }, ckpt_path)
             torch.save(netE.state_dict(), os.path.join(output_dir, 'last_E.pth'))
-            print(f'  >> Checkpoint saved: {ckpt_path}')
+            log(f'  >> Checkpoint saved: {ckpt_path}')
 
     # --- 終了処理 ---
     total_time = time.time() - t_start
-    print(f'\n--- Done. Total time: {total_time/3600:.2f}h ---')
+    log(f'--- Done. Total time: {total_time/3600:.2f}h ---')
 
-    # last_E.pth を最終状態で保存（チェックポイント保存がなかった場合もカバー）
     torch.save(netE.state_dict(), os.path.join(output_dir, 'last_E.pth'))
-    print(f'last_E.pth saved to {output_dir}')
-    print(f'\nTo use the trained model:')
-    print(f'  cp {os.path.join(output_dir, "last_E.pth")} models/KAIR/model_zoo/BSRGAN_custom.pth')
+    log(f'last_E.pth saved to {output_dir}')
+    log(f'To use the trained model:')
+    log(f'  cp {os.path.join(output_dir, "last_E.pth")} models/KAIR/model_zoo/BSRGAN_custom.pth')
 
 
 if __name__ == '__main__':

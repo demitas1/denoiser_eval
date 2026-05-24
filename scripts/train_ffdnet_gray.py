@@ -22,7 +22,7 @@ FFDNet を L1 損失で学習する。公式 ffdnet_gray.pth からの fine-tuni
       --datasets unsplash_lite \
       --pretrained models/KAIR/model_zoo/ffdnet_gray.pth
 
-  # チェックポイントから再開
+  # チェックポイントから再開（同じ config を使えばログは自動追記）
   python scripts/train_ffdnet_gray.py \
       --config options/train_ffdnet_gray_unsplash.json \
       --datasets unsplash_lite \
@@ -41,6 +41,7 @@ import os
 import random
 import sys
 import time
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -197,12 +198,23 @@ def main():
     output_dir = os.path.join(ROOT, opt['output_dir']) if not os.path.isabs(opt['output_dir']) else opt['output_dir']
     os.makedirs(output_dir, exist_ok=True)
 
+    config_stem = os.path.splitext(os.path.basename(config_path))[0]
+    log_path = os.path.join(output_dir, f'{config_stem}.log')
+
+    def log(msg):
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        line = f'[{ts}]  {msg}'
+        print(line)
+        with open(log_path, 'a', encoding='utf-8') as flog:
+            flog.write(line + '\n')
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
-    print(f'Config: {config_path}')
-    print(f'Total iters: {total_iters}  sigma=[{opt["sigma_min"]},{opt["sigma_max"]}]'
-          f'  sigma_test={opt["sigma_test"]}  lr={opt["lr"]}')
-    print(f'Output: {output_dir}')
+    log(f'Device: {device}')
+    log(f'Config: {config_stem}')
+    log(f'Total iters: {total_iters}  sigma=[{opt["sigma_min"]},{opt["sigma_max"]}]'
+        f'  sigma_test={opt["sigma_test"]}  lr={opt["lr"]}')
+    log(f'Output: {output_dir}')
+    log(f'Log: {log_path}')
 
     def abs_path(p):
         return p if os.path.isabs(p) else os.path.join(ROOT, p)
@@ -214,13 +226,13 @@ def main():
         train_dirs = [os.path.join(base_train_dir, name) for name in args.datasets]
         missing = [d for d in train_dirs if not os.path.isdir(d)]
         if missing:
-            print(f'Error: dataset directories not found: {missing}')
+            log(f'Error: dataset directories not found: {missing}')
             sys.exit(1)
         train_dir = train_dirs
     else:
         train_dir = base_train_dir
-    print(f'Train data: {train_dir}')
-    print(f'Test  data: {test_dir}')
+    log(f'Train data: {train_dir}')
+    log(f'Test  data: {test_dir}')
 
     train_set = FFDNetGrayDataset(train_dir, patch_size=opt['H_size'],
                                   sigma_min=opt['sigma_min'], sigma_max=opt['sigma_max'],
@@ -230,7 +242,7 @@ def main():
     )
     if not test_paths:
         raise FileNotFoundError(f'No test images found in {test_dir}')
-    print(f'Train images: {len(train_set.paths)}  Test images: {len(test_paths)}')
+    log(f'Train images: {len(train_set.paths)}  Test images: {len(test_paths)}')
 
     train_loader = DataLoader(train_set, batch_size=opt['batch_size'],
                               shuffle=True, num_workers=opt['num_workers'],
@@ -249,27 +261,27 @@ def main():
 
     if args.resume:
         resume_path = args.resume if os.path.isabs(args.resume) else os.path.join(ROOT, args.resume)
-        print(f'Resuming from {resume_path}')
+        log(f'Resuming from {resume_path}')
         ckpt = torch.load(resume_path, map_location=device, weights_only=False)
         model.load_state_dict(ckpt['state_dict'])
         optimizer.load_state_dict(ckpt['optimizer'])
         scheduler.load_state_dict(ckpt['scheduler'])
         start_step = ckpt['step'] + 1
         best_psnr = ckpt.get('best_psnr', 0.0)
-        print(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
+        log(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
     elif args.pretrained:
         pretrained_path = args.pretrained if os.path.isabs(args.pretrained) else os.path.join(ROOT, args.pretrained)
-        print(f'Loading pretrained weights: {pretrained_path}')
+        log(f'Loading pretrained weights: {pretrained_path}')
         model.load_state_dict(torch.load(pretrained_path, map_location=device, weights_only=False), strict=True)
-        print('  Pretrained weights loaded.')
+        log('  Pretrained weights loaded.')
     else:
-        print('Training from scratch (random init).')
+        log('Training from scratch (random init).')
 
     model.train()
     train_iter = iter(train_loader)
     t_start = time.time()
 
-    print(f'\n--- Training start (step {start_step} → {total_iters}) ---')
+    log(f'--- Training start (step {start_step} → {total_iters}) ---')
 
     for step in range(start_step, total_iters):
         try:
@@ -295,16 +307,16 @@ def main():
             elapsed = time.time() - t_start
             iters_done = step - start_step + 1
             eta = elapsed / iters_done * (total_iters - step - 1) if iters_done > 0 else 0
-            print(f'[{step:6d}/{total_iters}]'
-                  f'  loss={loss.item():.4f}'
-                  f'  lr={scheduler.get_last_lr()[0]:.2e}'
-                  f'  elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m')
+            log(f'[{step:6d}/{total_iters}]'
+                f'  loss={loss.item():.4f}'
+                f'  lr={scheduler.get_last_lr()[0]:.2e}'
+                f'  elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m')
 
         if opt['checkpoint_test'] > 0 and step % opt['checkpoint_test'] == 0 and step > 0:
             psnr = evaluate_psnr(model, test_paths, opt['H_size'], opt['sigma_test'], device)
             model.train()
             flag = ' *** best ***' if psnr > best_psnr else ''
-            print(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_paths)} imgs): {psnr:.2f} dB{flag}')
+            log(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_paths)} imgs): {psnr:.2f} dB{flag}')
             if psnr > best_psnr:
                 best_psnr = psnr
                 torch.save(model.state_dict(), os.path.join(output_dir, 'best.pth'))
@@ -318,26 +330,26 @@ def main():
                 'scheduler': scheduler.state_dict(),
                 'best_psnr': best_psnr,
             }, ckpt_path)
-            print(f'  >> Checkpoint saved: {ckpt_path}')
+            log(f'  >> Checkpoint saved: {ckpt_path}')
 
     total_time = time.time() - t_start
-    print(f'\n--- Done. Total time: {total_time/3600:.2f}h ---')
+    log(f'--- Done. Total time: {total_time/3600:.2f}h ---')
 
     if best_psnr == 0.0:
-        print('Running final PSNR evaluation...')
+        log('Running final PSNR evaluation...')
         psnr = evaluate_psnr(model, test_paths, opt['H_size'], opt['sigma_test'], device)
         model.train()
-        print(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_paths)} imgs): {psnr:.2f} dB')
+        log(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_paths)} imgs): {psnr:.2f} dB')
         best_psnr = psnr
         torch.save(model.state_dict(), os.path.join(output_dir, 'best.pth'))
-        print('  >> best.pth saved')
+        log('  >> best.pth saved')
 
-    print(f'Best PSNR: {best_psnr:.2f} dB')
+    log(f'Best PSNR: {best_psnr:.2f} dB')
     final_path = os.path.join(output_dir, f'final_iter{total_iters}.pth')
     torch.save(model.state_dict(), final_path)
-    print(f'Final model: {final_path}')
-    print(f'\nTo use the trained model:')
-    print(f'  cp {os.path.join(output_dir, "best.pth")} models/KAIR/model_zoo/ffdnet_gray_unsplash.pth')
+    log(f'Final model: {final_path}')
+    log(f'To use the trained model:')
+    log(f'  cp {os.path.join(output_dir, "best.pth")} models/KAIR/model_zoo/ffdnet_gray_unsplash.pth')
 
 
 if __name__ == '__main__':

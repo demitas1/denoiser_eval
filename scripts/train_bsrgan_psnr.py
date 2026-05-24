@@ -16,7 +16,7 @@ RRDBNet を L1 損失で学習する。GAN フェーズの前段として BSRNet
       --config options/train_bsrgan_x4_psnr_unsplash.json \
       --datasets unsplash_lite
 
-  # チェックポイントから再開
+  # チェックポイントから再開（同じ config を使えばログは自動追記）
   python scripts/train_bsrgan_psnr.py \
       --config options/train_bsrgan_x4_psnr_unsplash.json \
       --datasets unsplash_lite \
@@ -34,6 +34,7 @@ import math
 import os
 import sys
 import time
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -92,12 +93,24 @@ def main():
     output_dir = os.path.join(ROOT, opt['output_dir']) if not os.path.isabs(opt['output_dir']) else opt['output_dir']
     os.makedirs(output_dir, exist_ok=True)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
-    print(f'Config: {config_path}')
-    print(f'Total iters: {total_iters}')
-    print(f'Output: {output_dir}')
+    config_stem = os.path.splitext(os.path.basename(config_path))[0]
+    log_path = os.path.join(output_dir, f'{config_stem}.log')
 
+    def log(msg):
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        line = f'[{ts}]  {msg}'
+        print(line)
+        with open(log_path, 'a', encoding='utf-8') as flog:
+            flog.write(line + '\n')
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    log(f'Device: {device}')
+    log(f'Config: {config_stem}')
+    log(f'Total iters: {total_iters}')
+    log(f'Output: {output_dir}')
+    log(f'Log: {log_path}')
+
+    # --- データセット ---
     def abs_path(p):
         return p if os.path.isabs(p) else os.path.join(ROOT, p)
 
@@ -108,13 +121,13 @@ def main():
         train_dir = [os.path.join(base_train_dir, name) for name in args.datasets]
         missing = [d for d in train_dir if not os.path.isdir(d)]
         if missing:
-            print(f'Error: dataset directories not found: {missing}')
+            log(f'Error: dataset directories not found: {missing}')
             sys.exit(1)
-        print(f'Train data: {train_dir}')
+        log(f'Train data: {train_dir}')
     else:
         train_dir = base_train_dir
-        print(f'Train data: {train_dir} (all subdirectories)')
-    print(f'Test  data: {test_dir}')
+        log(f'Train data: {train_dir} (all subdirectories)')
+    log(f'Test  data: {test_dir}')
 
     ds_opt_train = {
         'phase': 'train',
@@ -144,10 +157,10 @@ def main():
     if not args.test_recursive:
         test_set.paths_H = [p for p in test_set.paths_H if os.path.dirname(p) == test_dir]
         if not test_set.paths_H:
-            print(f'Error: no images found in top-level of {test_dir}. '
-                  f'Use --test_recursive to include subdirectories.')
+            log(f'Error: no images found in top-level of {test_dir}. '
+                f'Use --test_recursive to include subdirectories.')
             sys.exit(1)
-    print(f'Train images: {len(train_set)}  Test images: {len(test_set)}')
+    log(f'Train images: {len(train_set)}  Test images: {len(test_set)}')
 
     train_loader = DataLoader(
         train_set,
@@ -174,7 +187,7 @@ def main():
 
     if args.resume:
         resume_path = args.resume if os.path.isabs(args.resume) else os.path.join(ROOT, args.resume)
-        print(f'Resuming from {resume_path}')
+        log(f'Resuming from {resume_path}')
         ckpt = torch.load(resume_path, map_location=device)
         netG.load_state_dict(ckpt['netG'])
         netE.load_state_dict(ckpt['netE'])
@@ -182,16 +195,16 @@ def main():
         G_sch.load_state_dict(ckpt['G_scheduler'])
         start_step = ckpt['step'] + 1
         best_psnr  = ckpt.get('best_psnr', 0.0)
-        print(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
+        log(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
     else:
         netE.load_state_dict(netG.state_dict())
-        print('Training from scratch (random init).')
+        log('Training from scratch (random init).')
 
     netG.train()
     train_iter = iter(train_loader)
     t_start = time.time()
 
-    print(f'\n--- Training start (step {start_step} → {total_iters}) ---')
+    log(f'--- Training start (step {start_step} → {total_iters}) ---')
 
     for step in range(start_step, total_iters):
         try:
@@ -222,7 +235,7 @@ def main():
             elapsed = time.time() - t_start
             iters_done = step - start_step + 1
             eta = elapsed / iters_done * (total_iters - step - 1) if iters_done > 0 else 0
-            print(
+            log(
                 f'[{step:6d}/{total_iters}]'
                 f'  loss={loss_G.item():.4f}'
                 f'  lr={G_sch.get_last_lr()[0]:.2e}'
@@ -234,7 +247,7 @@ def main():
             netE.eval()
             netG.train()
             flag = ' *** best ***' if psnr > best_psnr else ''
-            print(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB{flag}')
+            log(f'  >> PSNR (EMA, {os.path.basename(test_dir)}): {psnr:.2f} dB{flag}')
             if psnr > best_psnr:
                 best_psnr = psnr
                 torch.save(netE.state_dict(), os.path.join(output_dir, 'best.pth'))
@@ -250,15 +263,15 @@ def main():
                 'best_psnr': best_psnr,
             }, ckpt_path)
             torch.save(netE.state_dict(), os.path.join(output_dir, 'last_E.pth'))
-            print(f'  >> Checkpoint saved: {ckpt_path}')
+            log(f'  >> Checkpoint saved: {ckpt_path}')
 
     total_time = time.time() - t_start
-    print(f'\n--- Done. Total time: {total_time/3600:.2f}h ---')
+    log(f'--- Done. Total time: {total_time/3600:.2f}h ---')
 
     torch.save(netE.state_dict(), os.path.join(output_dir, 'last_E.pth'))
-    print(f'last_E.pth saved to {output_dir}')
-    print(f'\nTo use as GAN pretrain:')
-    print(f'  cp {os.path.join(output_dir, "best.pth")} models/KAIR/model_zoo/BSRNet_unsplash.pth')
+    log(f'last_E.pth saved to {output_dir}')
+    log(f'To use as GAN pretrain:')
+    log(f'  cp {os.path.join(output_dir, "best.pth")} models/KAIR/model_zoo/BSRNet_unsplash.pth')
 
 
 if __name__ == '__main__':

@@ -28,7 +28,7 @@ SCUNet グレースケールモデル (sigma=10) の学習スクリプト。
   python scripts/train_scunet_gray.py \
       --config options/train_scunet_gray_finetune.json
 
-  # チェックポイントから再開
+  # チェックポイントから再開（同じ config を使えばログは自動追記）
   python scripts/train_scunet_gray.py \
       --config options/train_scunet_gray_finetune.json \
       --resume results/train_scunet_gray/iter_010000.pth
@@ -50,6 +50,7 @@ import os
 import random
 import sys
 import time
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -185,11 +186,22 @@ def main():
     output_dir = os.path.join(ROOT, opt['output_dir']) if not os.path.isabs(opt['output_dir']) else opt['output_dir']
     os.makedirs(output_dir, exist_ok=True)
 
+    config_stem = os.path.splitext(os.path.basename(config_path))[0]
+    log_path = os.path.join(output_dir, f'{config_stem}.log')
+
+    def log(msg):
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        line = f'[{ts}]  {msg}'
+        print(line)
+        with open(log_path, 'a', encoding='utf-8') as flog:
+            flog.write(line + '\n')
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
-    print(f'Config: {config_path}')
-    print(f'Total iters: {total_iters}  sigma={opt["sigma"]}  lr={opt["lr"]}')
-    print(f'Output: {output_dir}')
+    log(f'Device: {device}')
+    log(f'Config: {config_stem}')
+    log(f'Total iters: {total_iters}  sigma={opt["sigma"]}  lr={opt["lr"]}')
+    log(f'Output: {output_dir}')
+    log(f'Log: {log_path}')
 
     # --- データセット ---
     def abs_path(p):
@@ -202,19 +214,19 @@ def main():
         train_dirs = [os.path.join(base_train_dir, name) for name in args.datasets]
         missing = [d for d in train_dirs if not os.path.isdir(d)]
         if missing:
-            print(f'Error: dataset directories not found: {missing}')
+            log(f'Error: dataset directories not found: {missing}')
             sys.exit(1)
         train_dir = train_dirs
     else:
         train_dir = base_train_dir
-    print(f'Train data: {train_dir}')
-    print(f'Test  data: {test_dir}')
+    log(f'Train data: {train_dir}')
+    log(f'Test  data: {test_dir}')
 
     train_set = SCUNetGrayDataset(train_dir, patch_size=opt['patch_size'],
                                   sigma=opt['sigma'], phase='train')
     test_set  = SCUNetGrayDataset(test_dir,  patch_size=opt['patch_size'],
                                   sigma=opt['sigma_test'], phase='test')
-    print(f'Train images: {len(train_set.paths)}  Test images: {len(test_set.paths)}')
+    log(f'Train images: {len(train_set.paths)}  Test images: {len(test_set.paths)}')
 
     train_loader = DataLoader(train_set, batch_size=opt['batch_size'],
                               shuffle=True, num_workers=4,
@@ -233,27 +245,26 @@ def main():
 
     if args.resume:
         resume_path = args.resume if os.path.isabs(args.resume) else os.path.join(ROOT, args.resume)
-        print(f'Resuming from {resume_path}')
+        log(f'Resuming from {resume_path}')
         ckpt = torch.load(resume_path, map_location=device)
         model.load_state_dict(ckpt['state_dict'])
         optimizer.load_state_dict(ckpt['optimizer'])
         scheduler.load_state_dict(ckpt['scheduler'])
         start_step = ckpt['step'] + 1
         best_psnr = ckpt.get('best_psnr', 0.0)
-        print(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
+        log(f'  Resumed at step={start_step}  best_psnr={best_psnr:.2f}')
     elif opt.get('pretrained'):
         pretrained_path = opt['pretrained'] if os.path.isabs(opt['pretrained']) else os.path.join(ROOT, opt['pretrained'])
-        print(f'Loading pretrained weights: {pretrained_path}')
+        log(f'Loading pretrained weights: {pretrained_path}')
         model.load_state_dict(torch.load(pretrained_path, map_location=device), strict=True)
-        print('  Pretrained weights loaded.')
+        log('  Pretrained weights loaded.')
 
     # --- 学習ループ ---
     model.train()
     train_iter = iter(train_loader)
     t_start = time.time()
-    t_log = t_start
 
-    print(f'\n--- Training start (step {start_step} → {total_iters}) ---')
+    log(f'--- Training start (step {start_step} → {total_iters}) ---')
 
     for step in range(start_step, total_iters):
         try:
@@ -274,24 +285,23 @@ def main():
         scheduler.step()
 
         if step % 100 == 0:
-            now = time.time()
-            elapsed = now - t_start
+            elapsed = time.time() - t_start
             iters_done = step - start_step + 1
             iters_left = total_iters - step - 1
             eta = elapsed / iters_done * iters_left if iters_done > 0 else 0
-            print(f'[{step:6d}/{total_iters}] loss={loss.item():.4f}'
-                  f'  lr={scheduler.get_last_lr()[0]:.2e}'
-                  f'  elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m')
-            t_log = now
+            log(f'[{step:6d}/{total_iters}] loss={loss.item():.4f}'
+                f'  lr={scheduler.get_last_lr()[0]:.2e}'
+                f'  elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m')
 
         # 検証 PSNR
         if opt['checkpoint_test'] > 0 and step % opt['checkpoint_test'] == 0 and step > 0:
             psnr = evaluate_psnr(model, test_set, device, opt['sigma_test'])
-            print(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_set.paths)} imgs): {psnr:.2f} dB')
+            flag = ' *** best ***' if psnr > best_psnr else ''
+            log(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_set.paths)} imgs): {psnr:.2f} dB{flag}')
             if psnr > best_psnr:
                 best_psnr = psnr
                 torch.save(model.state_dict(), os.path.join(output_dir, 'best.pth'))
-                print(f'  >> Best model saved ({best_psnr:.2f} dB)')
+                log(f'  >> Best model saved ({best_psnr:.2f} dB)')
 
         # チェックポイント保存
         if opt['checkpoint_save'] > 0 and step % opt['checkpoint_save'] == 0 and step > 0:
@@ -303,30 +313,30 @@ def main():
                 'scheduler': scheduler.state_dict(),
                 'best_psnr': best_psnr,
             }, ckpt_path)
-            print(f'  >> Checkpoint saved: {ckpt_path}')
+            log(f'  >> Checkpoint saved: {ckpt_path}')
 
     # --- 終了処理 ---
     total_time = time.time() - t_start
-    print(f'\n--- Done. Total time: {total_time/3600:.2f}h ---')
+    log(f'--- Done. Total time: {total_time/3600:.2f}h ---')
 
     # ループ中に PSNR 評価が一度も走らなかった場合（--max_iters が小さいとき等）は終了時に実行
     if best_psnr == 0.0:
-        print('Running final PSNR evaluation...')
+        log('Running final PSNR evaluation...')
         psnr = evaluate_psnr(model, test_set, device, opt['sigma_test'])
-        print(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_set.paths)} imgs): {psnr:.2f} dB')
+        log(f'  >> PSNR (σ={opt["sigma_test"]}, {len(test_set.paths)} imgs): {psnr:.2f} dB')
         best_psnr = psnr
         torch.save(model.state_dict(), os.path.join(output_dir, 'best.pth'))
-        print(f'  >> best.pth saved')
+        log('  >> best.pth saved')
 
-    print(f'Best PSNR: {best_psnr:.2f} dB')
+    log(f'Best PSNR: {best_psnr:.2f} dB')
 
     # 最終モデルを保存（best と別に）
     final_path = os.path.join(output_dir, f'final_iter{total_iters}.pth')
     torch.save(model.state_dict(), final_path)
-    print(f'Final model: {final_path}')
-    print(f'\nTo use the trained model:')
-    print(f'  cp {os.path.join(output_dir, "best.pth")} models/SCUNet/model_zoo/scunet_gray_10.pth')
-    print(f'  python scripts/run_scunet.py --input test_inputs/ --model scunet_gray_10 scunet_gray_15')
+    log(f'Final model: {final_path}')
+    log(f'To use the trained model:')
+    log(f'  cp {os.path.join(output_dir, "best.pth")} models/SCUNet/model_zoo/scunet_gray_10.pth')
+    log(f'  python scripts/run_scunet.py --input test_inputs/ --model scunet_gray_10 scunet_gray_15')
 
 
 if __name__ == '__main__':
