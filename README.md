@@ -28,7 +28,7 @@
 
 `results/trained_models/` に保存、Git LFS で管理。
 
-> **ライセンス注記**: Unsplash Lite の利用規約（Dataset Terms Section 2.A）では、学習・利用は**内部業務目的に限定**されます。外部配布・商用プロダクトへの組み込みは Unsplash への確認が必要です。
+> **ライセンス注記**: Unsplash Lite の利用規約（Dataset Terms Section 2.A）では、学習・利用について商用利用は可能ですが**内部業務目的に限定**されます。商用プロダクトへの組み込みは Unsplash への確認が必要です。
 
 ---
 
