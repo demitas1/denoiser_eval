@@ -237,7 +237,7 @@ cd /path/to/denoiser_eval
 # 実世界ノイズ（PSNR版、デフォルト）
 python scripts/run_scunet.py --input test_inputs/ --output results/SCUNet
 
-# 実世界ノイズ（GAN版）※ 敵対学習により出力がシャープになるが、存在しない線の捏造（hallucination）が起こりやすい
+# 実世界ノイズ（GAN版）※ 敵対学習により出力がシャープになるが、存在しない線のハルシネーションが起こりやすい
 python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_gan
 
 # グレースケール3強度を一括出力
@@ -254,12 +254,12 @@ python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_psnr
 | モデル | 特性 |
 |---|---|
 | `scunet_color_real_psnr` | ピクセル誤差学習。安全だが線がぼやけがち |
-| `scunet_color_real_gan` | 敵対学習。シャープだが線の捏造リスクあり |
+| `scunet_color_real_gan` | 敵対学習。シャープだが線のハルシネーションリスクあり |
 | `scunet_gray_15` | グレースケール固定 sigma=15 相当（弱） |
 | `scunet_gray_25` | グレースケール固定 sigma=25 相当（中） |
 | `scunet_gray_50` | グレースケール固定 sigma=50 相当（強） |
 
-鉛筆スケッチには **PSNR版から先に試す** のが妥当（捏造リスク低）。PSNR版より強め・GAN版より安全な中間が欲しい場合は `scunet_gray_*` の3強度を一括比較するとよい。
+鉛筆スケッチには **PSNR版から先に試す** のが妥当（ハルシネーションリスク低）。PSNR版より強め・GAN版より安全な中間が欲しい場合は `scunet_gray_*` の3強度を一括比較するとよい。
 
 ### オプション
 
@@ -326,12 +326,12 @@ python scripts/run_esrgan.py --input test_inputs/ --downscale none
 
 | モデル | スケール | 学習ロス | 特性 |
 |---|---|---|---|
-| `BSRGAN` | ×4 | GAN | 実世界劣化合成データで学習。シャープだが捏造リスクあり |
+| `BSRGAN` | ×4 | GAN | 実世界劣化合成データで学習。シャープだがハルシネーションリスクあり |
 | `BSRNet` | ×4 | PSNR (L1) | BSRGAN の PSNR 版。安全だが出力がやや滑らか |
 | `BSRGANx2` | ×2 | GAN | BSRGAN の ×2 版 |
 | `ESRGAN` | ×4 | GAN | 古典的 ESRGAN。鮮明だが BSRGAN より実世界劣化への汎化が弱い |
 
-鉛筆スケッチには **BSRNet から先に試す** のが妥当（捏造リスク低）。
+鉛筆スケッチには **BSRNet から先に試す** のが妥当（ハルシネーションリスク低）。
 
 ### オプション
 

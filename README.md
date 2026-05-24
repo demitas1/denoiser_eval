@@ -16,7 +16,7 @@
 | Restormer | `run_restormer.py` | Transformer デノイザ、4タスク対応（実世界ノイズ / ガウシアン / モーションブラー / ピンボケ） |
 | SCUNet | `run_scunet.py` | 実世界ブラインドデノイザ（カラー・グレースケール各強度） |
 | BSRGAN | `run_esrgan.py` | ×4 超解像 GAN（実世界劣化に強い） |
-| BSRNet | `run_esrgan.py` | ×4 超解像 PSNR（捏造リスクが低い安全版） |
+| BSRNet | `run_esrgan.py` | ×4 超解像 PSNR（ハルシネーションリスクが低い安全版） |
 
 重みのダウンロード方法・推論コマンドの詳細は [推論ガイド](docs/inference_guide.md) を参照。
 

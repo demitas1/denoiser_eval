@@ -6,7 +6,7 @@ sys.path 追加でインストール不要。
   # 実世界ノイズ（PSNR版、デフォルト）
   python scripts/run_scunet.py --input test_inputs/ --output results/SCUNet
 
-  # 実世界ノイズ（GAN版、シャープだが捏造リスクあり）
+  # 実世界ノイズ（GAN版、シャープだがハルシネーションリスクあり）
   python scripts/run_scunet.py --input test_inputs/ --model scunet_color_real_gan
 
   # グレースケール3強度を一括出力（デフォルト: gray_15 gray_25 gray_50）
