@@ -19,8 +19,9 @@ Git LFS で管理（`.gitattributes` に設定済み）。
 | テストデータ | Unsplash Lite test（100 枚、訓練セットから分割） |
 | 学習設定 | `options/train_ffdnet_gray_unsplash.json` |
 | イテレーション | 500k |
-| 学習時間 | 約 3 時間（RTX 3060） |
+| 学習時間 | (記録なし) |
 | Best PSNR | **33.88 dB**（σ=25、Unsplash test 100 枚） |
+| PSNR | **28.83 dB**（σ=25、pexels-cc0-100-2 100 枚、seed=0） |
 | 保存内容 | `state_dict` のみ（Best PSNR 時点） |
 | 完了日 | 2026-05-22 |
 
@@ -43,12 +44,12 @@ python scripts/run_ffdnet_custom.py \
 | テストデータ | pexels-cc0（41 枚 PNG、768×768）※ v1 時点の旧テストセット |
 | 学習設定 | `options/train_bsrgan_x4_psnr_unsplash.json` |
 | イテレーション | 500k（Best は step 254k） |
-| 学習時間 | 約 32 時間（RTX 3060） |
+| 学習時間 | (記録なし) |
 | LR スケジュール | 初期 1e-4 → 200k で 5e-5 → 400k で 2.5e-5 |
 | 劣化パイプライン | BSRGAN degradation（`lq_patchsize=72, H_size=320, sf=4`） |
 | EMA decay | 0.999 |
 | Best PSNR（学習中） | **23.21 dB**（旧テストセット 41 枚、seed なし） |
-| PSNR（公式比較） | **20.76 dB**（pexels-cc0-100-2 100 枚、seed=0） |
+| PSNR | **20.76 dB**（pexels-cc0-100-2 100 枚、seed=0） |
 | 公式 BSRNet との差 | −0.10 dB（公式 20.86 dB、評価ばらつき以内） |
 | 保存内容 | EMA 重み（`netE`）の `state_dict` のみ |
 | 完了日 | 2026-05-26 |
@@ -76,6 +77,7 @@ python scripts/eval_bsrnet_psnr.py \
 | 学習データ | Unsplash Lite（1,899 枚 JPEG、1080px幅） |
 | その他条件 | v1_best と同じ |
 | イテレーション | step 500k（最終 EMA 重み） |
+| PSNR | **20.90 dB**（pexels-cc0-100-2 100 枚、seed=0） |
 | 保存内容 | EMA 重み（`netE`）の `state_dict` のみ |
 | 備考 | GAN フェーズの出発点候補（best より知覚品質が高い場合あり） |
 
