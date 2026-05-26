@@ -77,7 +77,7 @@ python scripts/eval_bsrnet_psnr.py \
 | 学習データ | Unsplash Lite（1,899 枚 JPEG、1080px幅） |
 | その他条件 | v1_best と同じ |
 | イテレーション | step 500k（最終 EMA 重み） |
-| PSNR | **20.90 dB**（pexels-cc0-100-2 100 枚、seed=0） |
+| PSNR | **20.62 dB**（pexels-cc0-100-2 100 枚、seed=0） |
 | 保存内容 | EMA 重み（`netE`）の `state_dict` のみ |
 | 備考 | GAN フェーズの出発点候補（best より知覚品質が高い場合あり） |
 
