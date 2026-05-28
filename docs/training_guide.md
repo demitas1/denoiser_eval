@@ -283,7 +283,7 @@ mogrify -colorspace sRGB -type TrueColor trainsets/trainH/custom/*.png
 
 `degradation_inputs/` ディレクトリに可視化用の入力画像を配置します（gitignore 対象）。付属の `degradation_inputs/example.png`（320×320 モノクロ グリッド画像）でブラーのぼけ、ダウンサンプルのブロック状ピクセル化、JPEG のリンギングを確認できます。
 
-### 操作インデックス
+### 操作インデックス（概要）
 
 | idx | 操作 | 内容 |
 |---|---|---|
@@ -293,6 +293,85 @@ mogrify -colorspace sRGB -type TrueColor trainsets/trainH/custom/*.png
 | 4 | ガウシアンノイズ | カラー / グレー / 相関ノイズをランダム選択 |
 | 5 | JPEG 圧縮 | 品質 30〜95 でランダム圧縮 |
 | 6 | ISP カメラノイズ | no-op（モデルなし） |
+
+### `degradation_bsrgan()` 全体フローと詳細パラメータ
+
+ソース: `models/KAIR/utils/utils_blindsr.py` の `degradation_bsrgan()` 関数（sf=4 の場合）。
+
+#### 全体フロー
+
+```
+[HR 入力]
+  ↓ ① 事前ハーフスケール（25% 確率）
+    sf=4 → sf=2 に切り替え（以降の操作は sf=2 として実行）
+  ↓ ② シャッフル適用（idx 0〜6 をランダム順で 1 回ずつ）
+    制約: idx2（中間ダウンサンプル）は idx3（最終ダウンサンプル）より前に来る
+  ↓ ③ 最終 JPEG 圧縮（必ず実行、品質 30〜95）
+  ↓ ④ ランダムクロップ（LR: lq_patchsize×lq_patchsize, HR: lq_patchsize×sf 角）
+[LR パッチ, HR パッチ]
+```
+
+#### 各操作の詳細
+
+**idx 0, 1 — ブラー** (`add_blur`, `utils_blindsr.py:335`)
+
+50% の確率で等方性 / 非等方性ガウシアンを選択:
+
+| 種別 | カーネルサイズ | パラメータ |
+|---|---|---|
+| 非等方性ガウシアン（50%） | `2*randint(2,11)+3` → 7〜25px | l1, l2 ∈ [0, 8.0]（sf=4 時）, θ ∈ [0, π] |
+| 等方性ガウシアン（50%） | 同上 | sigma ∈ [0, 2.8]（sf=4 時） |
+
+`wd2 = 4.0 + sf`、`wd = 2.0 + 0.2*sf` が上限を決める。
+
+**idx 2 — 中間ダウンサンプル** (`utils_blindsr.py:479`)
+
+75% 確率でリサイズ方式、25% 確率でブラー + ストライドダウンサンプル:
+
+| 方式 | 内容 |
+|---|---|
+| リサイズ（75%） | 縮小率 1/(1〜2×sf) でランダムリサイズ（bilinear/bicubic/area のいずれか） |
+| ブラー+ストライド（25%） | Gaussian(ksize=25, sigma=0.1〜2.4) → stride-sf nearest |
+
+その後 `add_resize` で上下 / そのまま / 縮小をランダム追加（いずれもリサイズ補間はランダム）。
+
+**idx 3 — 最終ダウンサンプル** (`utils_blindsr.py:493`)
+
+| 内容 |
+|---|
+| ×1/sf にリサイズ（bilinear/bicubic/area のいずれか） |
+
+必ず idx2 より後に適用される（シャッフル順の制約）。
+
+**idx 4 — ガウシアンノイズ** (`add_Gaussian_noise`, `utils_blindsr.py:363`)
+
+| 種別 | 確率 | 内容 |
+|---|---|---|
+| カラーノイズ | 60% | 各チャンネル独立, σ ∈ [2/255, 25/255] |
+| グレーノイズ | 40% | 全チャンネル同一ノイズ, σ ∈ [2/255, 25/255] |
+| 相関ノイズ | 残り | 多変量正規分布（3×3 ランダム共分散行列） |
+
+**idx 5 — JPEG 圧縮** (`add_JPEG_noise`, `utils_blindsr.py:412`)
+
+| 内容 |
+|---|
+| 実行確率: 90%（`jpeg_prob=0.9`） |
+| 品質: `randint(30, 95)` |
+| 実装: `cv2.imencode('.jpg')` → `cv2.imdecode`（RGB↔BGR 変換込み） |
+
+**idx 6 — ISP カメラノイズ** (`utils_blindsr.py:507`)
+
+`isp_model` が `None` のとき常に no-op。現在の学習設定では常にスキップ。
+
+**最終 JPEG 圧縮（必須、`utils_blindsr.py:514`）**
+
+シャッフルとは別に idx5 と同じ処理を **必ず 1 回** 追加実行する。品質 30〜95。
+
+#### FFDNet との関係
+
+FFDNet（σ固定推論）が除去できるのは **idx4 のガウシアンノイズ成分のみ**。
+idx0,1（ブラー）、idx2,3（ダウンサンプル由来のエイリアシング）、idx5 + 最終 JPEG（ブロックノイズ）は FFDNet では除去できない。
+LR-2 ベース学習（FFDNet 出力を入力とする BSRNet 学習）では残存劣化パターンを BSRNet が単独で学習することになる。
 
 ### 使い方
 
