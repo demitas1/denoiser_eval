@@ -349,6 +349,68 @@ python scripts/run_esrgan.py --input test_inputs/ --downscale none
 
 ---
 
+## SwinIR (Real-World SR)
+
+SwinIR の実世界 SR バリアント（BSRGAN 劣化学習済み）で超解像を実行します。重みは初回実行時に自動ダウンロードされます。
+
+### 重みのダウンロード
+
+```bash
+# 自動ダウンロード（初回実行時に models/KAIR/model_zoo/ へ保存）
+python scripts/run_swinir.py --input test_inputs/
+```
+
+手動でダウンロードする場合は `models/KAIR/model_zoo/` に配置してください:
+- `003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth`（SwinIR-M）
+- `003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth`（SwinIR-L）
+
+### 使い方
+
+```bash
+# SwinIR-M（デフォルト）— LANCZOS ダウンスケール版を保存
+python scripts/run_swinir.py --input test_inputs/ --output results/SwinIR
+
+# SwinIR-L（より高品質、VRAM 多く必要）
+python scripts/run_swinir.py --input test_inputs/ --model SwinIR-L
+
+# x4 アップスケール版も追加保存
+python scripts/run_swinir.py --input test_inputs/ --save_upscaled
+
+# アップスケール版のみ（ダウンスケールしない）
+python scripts/run_swinir.py --input test_inputs/ --downscale none --save_upscaled
+```
+
+### 出力ファイル名
+
+| ファイル | 内容 |
+|---|---|
+| `{basename}_SwinIR-M_lanczos.png` | LANCZOS ダウンスケール版（デフォルト保存） |
+| `{basename}_SwinIR-M_x4.png` | x4 アップスケール版（`--save_upscaled` 時追加） |
+
+### モデルの選択指針
+
+| モデル | パラメータ | 特性 |
+|---|---|---|
+| `SwinIR-M` | ~11.5M | 標準モデル。RTX 3060（12GB）で batch=4 に相当する推論が可能 |
+| `SwinIR-L` | ~28M | 大規模モデル。より高品質だが VRAM 消費が多い |
+
+### オプション
+
+| 引数 | デフォルト | 説明 |
+|---|---|---|
+| `--input` | （必須） | 入力画像ファイルまたはディレクトリ |
+| `--output` | `results/SwinIR` | 出力ディレクトリ |
+| `--model` | `SwinIR-M` | `SwinIR-M` または `SwinIR-L` |
+| `--model_zoo` | `models/KAIR/model_zoo` | 重みディレクトリ |
+| `--tile` | `512` | タイルサイズ（0 で無効化）。8 の倍数に自動丸め |
+| `--downscale` | `lanczos` | ダウンスケールアルゴリズム。`none` でアップスケール版のみ保存 |
+| `--save_upscaled` | off | x4 版も追加保存するフラグ |
+| `--cpu` | off | CPU 推論を強制 |
+
+> **VRAM メモ（RTX 3060 12GB）**: `--tile 512`（デフォルト）でタイル推論。SwinIR は window_size=8 の制約があるためタイルサイズは自動的に 8 の倍数に丸められる。
+
+---
+
 ## カスタム学習済み重みでの推論
 
 [学習ガイド](training_guide.md) で生成したチェックポイントを試験・評価するためのスクリプトです。`scripts/run_ffdnet_custom.py` / `scripts/run_bsrnet_custom.py` で学習途中のチェックポイントを使って推論を実行できます。
