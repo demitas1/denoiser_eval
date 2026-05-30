@@ -44,6 +44,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from skimage.metrics import structural_similarity as ssim_metric
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 KAIR_DIR = os.path.join(ROOT, 'models', 'KAIR')
@@ -124,7 +125,10 @@ def evaluate(model, paths, device, sigmas, seed):
 
             mse = F.mse_loss(pred, clean).item()
             psnr = 10.0 * math.log10(1.0 / mse) if mse > 1e-10 else 100.0
-            results[sigma].append((name, psnr))
+            pred_np = pred.squeeze().cpu().numpy()
+            clean_np = clean.squeeze().cpu().numpy()
+            ssim_val = ssim_metric(clean_np, pred_np, data_range=1.0)
+            results[sigma].append((name, psnr, ssim_val))
 
     return results
 
@@ -215,27 +219,32 @@ def main():
 
     # --- 出力 ---
     if args.tsv:
-        header_sigmas = '\t'.join(f'psnr_s{s}' for s in args.sigma)
+        header_sigmas = '\t'.join(f'psnr_s{s}\tssim_s{s}' for s in args.sigma)
         print(f'filename\t{header_sigmas}')
-        names = [n for n, _ in results[args.sigma[0]]]
+        names = [n for n, _, _ in results[args.sigma[0]]]
         for i, name in enumerate(names):
-            row = '\t'.join(f'{results[s][i][1]:.4f}' for s in args.sigma)
+            row = '\t'.join(f'{results[s][i][1]:.4f}\t{results[s][i][2]:.4f}' for s in args.sigma)
             print(f'{name}\t{row}')
     else:
         col = max(len(os.path.basename(p)) for p in paths)
         for sigma in args.sigma:
             print(f'--- sigma={sigma} ---')
-            for name, psnr in results[sigma]:
-                print(f'  {name:<{col}}  {psnr:.2f} dB')
-            psnrs = [p for _, p in results[sigma]]
-            avg = float(np.mean(psnrs))
-            print(f'  Average: {avg:.2f} dB'
-                  f'  (min: {min(psnrs):.2f}  max: {max(psnrs):.2f}  n={len(psnrs)})')
+            for name, psnr, ssim_val in results[sigma]:
+                print(f'  {name:<{col}}  {psnr:.2f} dB  SSIM {ssim_val:.4f}')
+            psnrs = [p for _, p, _ in results[sigma]]
+            ssims = [s for _, _, s in results[sigma]]
+            avg_psnr = float(np.mean(psnrs))
+            avg_ssim = float(np.mean(ssims))
+            print(f'  Average: PSNR {avg_psnr:.2f} dB  SSIM {avg_ssim:.4f}'
+                  f'  (n={len(psnrs)})')
             print()
 
     if args.tsv:
-        avg_row = '\t'.join(f'{float(np.mean([p for _, p in results[s]])):.4f}'
-                            for s in args.sigma)
+        avg_row = '\t'.join(
+            f'{float(np.mean([p for _, p, _ in results[s]])):.4f}'
+            f'\t{float(np.mean([sv for _, _, sv in results[s]])):.4f}'
+            for s in args.sigma
+        )
         print(f'Average\t{avg_row}')
 
 

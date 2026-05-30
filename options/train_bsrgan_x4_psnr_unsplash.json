@@ -22,6 +22,6 @@
   , "E_decay": 0.999
 
   , "checkpoint_save":  2000
-  , "checkpoint_test":  2000
+  , "checkpoint_test":  5000
   , "checkpoint_print": 100
 }

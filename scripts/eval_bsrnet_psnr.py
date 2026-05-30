@@ -43,6 +43,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from skimage.metrics import structural_similarity as ssim_metric
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 KAIR_DIR = os.path.join(ROOT, 'models', 'KAIR')
@@ -90,8 +91,11 @@ def evaluate(model, loader, device, seed):
             pred = model(L).clamp(0.0, 1.0)
             mse = F.mse_loss(pred, H).item()
             psnr = 10.0 * math.log10(1.0 / mse) if mse > 1e-10 else 100.0
+            pred_np = pred.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            h_np = H.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            ssim_val = ssim_metric(h_np, pred_np, data_range=1.0, channel_axis=-1)
             name = os.path.basename(loader.dataset.paths_H[i])
-            results.append((name, psnr))
+            results.append((name, psnr, ssim_val))
 
     np.random.set_state(rng_state)
     return results
@@ -203,23 +207,27 @@ def main():
 
     # --- 出力 ---
     if args.tsv:
-        print('filename\tpsnr')
-        for name, psnr in results:
-            print(f'{name}\t{psnr:.4f}')
+        print('filename\tpsnr\tssim')
+        for name, psnr, ssim_val in results:
+            print(f'{name}\t{psnr:.4f}\t{ssim_val:.4f}')
     else:
-        col = max(len(n) for n, _ in results)
-        for name, psnr in results:
-            print(f'  {name:<{col}}  {psnr:.2f} dB')
+        col = max(len(n) for n, _, _ in results)
+        for name, psnr, ssim_val in results:
+            print(f'  {name:<{col}}  {psnr:.2f} dB  SSIM {ssim_val:.4f}')
 
-    psnrs = [p for _, p in results]
-    avg = float(np.mean(psnrs))
+    psnrs = [p for _, p, _ in results]
+    ssims = [s for _, _, s in results]
+    avg_psnr = float(np.mean(psnrs))
+    avg_ssim = float(np.mean(ssims))
 
     if args.tsv:
-        print(f'Average\t{avg:.4f}')
+        print(f'Average\t{avg_psnr:.4f}\t{avg_ssim:.4f}')
     else:
         print()
-        print(f'Average PSNR: {avg:.2f} dB'
+        print(f'Average PSNR: {avg_psnr:.2f} dB'
               f'  (min: {min(psnrs):.2f}  max: {max(psnrs):.2f}  n={len(psnrs)})')
+        print(f'Average SSIM: {avg_ssim:.4f}'
+              f'  (min: {min(ssims):.4f}  max: {max(ssims):.4f})')
 
 
 if __name__ == '__main__':
