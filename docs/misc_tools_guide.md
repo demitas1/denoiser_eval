@@ -4,6 +4,104 @@
 
 ---
 
+## visualize_degradation.py — 劣化パイプライン可視化
+
+スクリプト: `scripts/visualize_degradation.py`
+
+BSRGAN 劣化パイプライン（idx 0–6）および鉛筆スケッチ向けカスタム劣化（idx 7–12）を
+単独または組み合わせで画像に適用し、結果を PNG として保存する。
+
+### 操作インデックス
+
+| idx | 名前 | 実装状況 |
+|---|---|---|
+| 0, 1 | blur_A / blur_B | ✅ |
+| 2 | downsample_mid | ✅ |
+| 3 | downsample_final | ✅ |
+| 4 | gaussian_noise | ✅ |
+| 5 | jpeg_noise | ✅ |
+| 6 | isp_noise | no-op（モデルなし） |
+| 7 | eraser_trace（消し跡） | no-op（issue #6 で実装予定） |
+| 8 | isotropic_smear（等方スメア） | no-op（issue #4 で実装予定） |
+| 9 | directional_smear（方向性スメア） | no-op（issue #5 で実装予定） |
+| 10 | paper_grain（紙粒感） | no-op（issue #3 で実装予定） |
+| 11 | stain（しみ） | no-op（issue #7 で実装予定） |
+| 12 | pressure_variation（圧力ムラ） | no-op（issue #2 で実装予定） |
+
+### 基本的な使い方
+
+```bash
+# 単一操作
+python scripts/visualize_degradation.py --input degradation_inputs/example.png --index 4
+
+# 複数操作を個別に保存（ファイルを各 idx ごとに出力）
+python scripts/visualize_degradation.py \
+    --input degradation_inputs/example.png \
+    --index 0 1 4 5 --output results/degradation_vis/
+
+# シャッフルモード（ランダムな順序で連続適用、3サンプル）
+python scripts/visualize_degradation.py \
+    --input degradation_inputs/example.png \
+    --index 0 1 2 3 4 5 --shuffle --num_samples 3
+
+# カスタム劣化 idx 7–12（現在は no-op）
+python scripts/visualize_degradation.py \
+    --input degradation_inputs/example.png \
+    --index 7 8 9 10 11 12 --output results/degradation_vis/
+
+# seed 固定で再現
+python scripts/visualize_degradation.py \
+    --input degradation_inputs/example.png \
+    --index 0 1 4 --seed 42
+```
+
+### 全オプション一覧
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `--input` | （必須） | 入力画像パス |
+| `--index` | （必須） | 適用する操作インデックス（複数指定可、0–12） |
+| `--output` | 入力と同ディレクトリ | 出力先ディレクトリ |
+| `--shuffle` | OFF | 指定インデックスをランダム順で連続適用 |
+| `--num_samples` | 1 | シャッフルモードで生成するサンプル数 |
+| `--sf` | 4 | ダウンサンプル操作のスケール倍率 |
+| `--patch_size` | 320 | 入力画像から切り出すパッチサイズ |
+| `--seed` | なし | 再現性のための乱数シード |
+
+### 出力ファイル名
+
+- 通常モード: `{stem}_{idx}.png`（例: `example_4.png`）
+- シャッフルモード: `{stem}_{idx0}_{idx1}_..._{idxN}.png`（複数サンプル時は末尾に `_sN`）
+
+---
+
+## utils/degradation_custom.py — カスタム劣化モジュール
+
+モジュール: `utils/degradation_custom.py`
+
+鉛筆スケッチ固有の劣化（idx 7–12）を提供する関数モジュール。
+`visualize_degradation.py` と `DatasetBlindSR`（issue #9）の両方から共用する。
+
+### インターフェース
+
+```python
+from utils.degradation_custom import apply_custom_op, CUSTOM_OPS
+
+# idx に対応する劣化を適用
+result = apply_custom_op(idx, img)   # img: np.ndarray float32 [0,1], (H,W) or (H,W,C)
+
+# 有効な idx 一覧
+print(sorted(CUSTOM_OPS.keys()))     # [7, 8, 9, 10, 11, 12]
+```
+
+### 各フィルターの実装時の追加方法
+
+各フィルターは `utils/degradation_custom.py` 内の対応関数（`apply_eraser_trace` など）の
+`return img.copy()` を実際の処理に置き換えるだけで有効になる。
+`visualize_degradation.py` や `DatasetBlindSR` 側は変更不要。
+
+---
+
 ## scan_image_quality.py — JPEG アーティファクト検出
 
 スクリプト: `scripts/scan_image_quality.py`

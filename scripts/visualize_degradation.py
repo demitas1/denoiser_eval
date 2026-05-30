@@ -9,7 +9,13 @@ BSRGAN 劣化パイプラインの各操作を可視化するスクリプト。
   3    : 最終ダウンサンプル（×1/sf、縮小後に元サイズへ nearest 拡大）
   4    : ガウシアンノイズ（カラー / グレー / 相関ノイズをランダム選択）
   5    : JPEG 圧縮（品質 30〜95、ランダム）
-  6    : ISP カメラノイズ（モデルなしのため no-op、警告を表示）
+  6    : ISP カメラノイズ（モデルなしのため no-op）
+  7    : 消し跡フィルター      (no-op、issue #6 で実装予定)
+  8    : 等方スメアフィルター  (no-op、issue #4 で実装予定)
+  9    : 方向性スメアフィルター(no-op、issue #5 で実装予定)
+  10   : 紙粒感フィルター      (no-op、issue #3 で実装予定)
+  11   : しみフィルター        (no-op、issue #7 で実装予定)
+  12   : 圧力ムラフィルター    (no-op、issue #2 で実装予定)
 
 【使い方】
   # 単一操作
@@ -42,6 +48,7 @@ from scipy import ndimage
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 KAIR_DIR = os.path.join(ROOT, 'models', 'KAIR')
 sys.path.insert(0, KAIR_DIR)
+sys.path.insert(0, ROOT)
 
 from utils.utils_blindsr import (
     add_blur,
@@ -50,15 +57,22 @@ from utils.utils_blindsr import (
     fspecial,
     shift_pixel,
 )
+from utils.degradation_custom import apply_custom_op, CUSTOM_OPS
 
 OP_NAMES = {
-    0: 'blur_A',
-    1: 'blur_B',
-    2: 'downsample_mid',
-    3: 'downsample_final',
-    4: 'gaussian_noise',
-    5: 'jpeg_noise',
-    6: 'isp_noise',
+    0:  'blur_A',
+    1:  'blur_B',
+    2:  'downsample_mid',
+    3:  'downsample_final',
+    4:  'gaussian_noise',
+    5:  'jpeg_noise',
+    6:  'isp_noise',
+    7:  'eraser_trace',
+    8:  'isotropic_smear',
+    9:  'directional_smear',
+    10: 'paper_grain',
+    11: 'stain',
+    12: 'pressure_variation',
 }
 
 
@@ -124,6 +138,9 @@ def apply_op(idx, img, sf=4):
     elif idx == 6:
         return img.copy()
 
+    elif idx in CUSTOM_OPS:
+        return apply_custom_op(idx, img)
+
     else:
         raise ValueError(f'Unknown index: {idx}')
 
@@ -166,9 +183,10 @@ def main():
         random.seed(args.seed)
         np.random.seed(args.seed)
 
+    valid_indices = set(range(7)) | set(CUSTOM_OPS.keys())
     for idx in args.index:
-        if idx not in range(7):
-            parser.error(f'Index {idx} is out of range (valid: 0-6)')
+        if idx not in valid_indices:
+            parser.error(f'Index {idx} is out of range (valid: 0-6, {sorted(CUSTOM_OPS.keys())})')
 
     # --- 入力画像 ---
     input_path = args.input if os.path.isabs(args.input) else os.path.join(ROOT, args.input)

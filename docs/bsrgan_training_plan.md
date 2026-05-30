@@ -155,9 +155,10 @@ angle → 回転行列で対角線上に 1 を持つカーネルを生成 → �
 
 ## 既存パイプラインへの組み込み方針
 
-### visualize_degradation.py への追加
+### visualize_degradation.py への追加（実装済み）
 
-`OP_NAMES` 辞書と `apply_op()` 関数に idx 7–12 を追加するだけで既存の CLI がそのまま使える。
+`utils/degradation_custom.py` に dispatcher を実装し、`visualize_degradation.py` を idx 0–12 対応に拡張済み。
+idx 7–12 は現在 no-op スタブ。各 issue で実装後、同スクリプトで即座に確認できる。
 
 ```bash
 python scripts/visualize_degradation.py \
