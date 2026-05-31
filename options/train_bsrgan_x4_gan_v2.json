@@ -1,0 +1,43 @@
+{
+  "task": "train_bsrgan_x4_gan_v2"
+
+  , "_pretrained_netG_options": {
+      "__usage__": "copy the desired path to pretrained_netG",
+      "v2_best":        "results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth",
+      "v2_last":        "results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_last.pth",
+      "official_bsrnet": "models/KAIR/model_zoo/BSRNet.pth"
+    }
+  , "pretrained_netG": "results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth"
+
+  , "dataroot_H":    "trainsets/trainH"
+  , "dataroot_test": "testsets/custom_natural/pexels-cc0-100-1"
+  , "output_dir":    "results/train_bsrgan_gan_v2"
+
+  , "total_iters": 400000
+
+  , "H_size":       320
+  , "lq_patchsize":  72
+  , "sf":             4
+  , "n_channels":     3
+
+  , "batch_size":   4
+  , "num_workers":  8
+
+  , "G_lr": 0.00005
+  , "D_lr": 0.00005
+  , "G_milestones": [200000, 400000]
+  , "D_milestones": [200000, 400000]
+  , "lr_gamma": 0.5
+
+  , "E_decay": 0.999
+
+  , "G_loss_weight": 1.0
+  , "F_loss_weight": 1.0
+  , "F_feature_layers": [2, 7, 16, 25, 34]
+  , "F_layer_weights":  [0.1, 0.1, 1.0, 1.0, 1.0]
+  , "D_loss_weight": 1.0
+
+  , "checkpoint_save":  2000
+  , "checkpoint_test":  5000
+  , "checkpoint_print": 100
+}
