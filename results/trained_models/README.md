@@ -90,11 +90,66 @@ cp results/trained_models/bsrnet_x4_scratch_unsplash_lite_v1_last.pth \
 
 ---
 
-## v1 → v2 の変更予定
+### bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth
 
-| 項目 | v1 | v2（予定） |
+| 項目 | 値 |
+|---|---|
+| アーキテクチャ | RRDBNet x4 (`nf=64, gc=32, nb=23`) |
+| 学習フェーズ | ゼロから（scratch）— PSNR フェーズ（L1 損失のみ） |
+| 学習データ | Unsplash Lite（3,511 枚 JPEG、1080px幅） |
+| テストデータ（学習中モニタリング） | pexels-cc0-100-1（100 枚 PNG、768×768） |
+| テストデータ（seed 固定評価） | pexels-cc0-100-2（100 枚 PNG、768×768） |
+| 学習設定 | `options/train_bsrgan_x4_psnr_unsplash.json` |
+| イテレーション | 500k（Best は step 420k） |
+| GPU 学習時間 | 約 79h（RTX 3060、10 セッション合計） |
+| LR スケジュール | 初期 1e-4 → 200k で 5e-5 → 400k で 2.5e-5 |
+| 劣化パイプライン | BSRGAN degradation（`lq_patchsize=72, H_size=320, sf=4`） |
+| EMA decay | 0.999 |
+| Best PSNR（seed=0） | **21.54 dB**（pexels-cc0-100-2 100 枚） |
+| Best SSIM（seed=0） | **0.4892**（同上） |
+| 保存内容 | EMA 重み（`netE` @ step 420k）の `state_dict` のみ |
+| 完了日 | 2026-05-30 |
+
+```bash
+# 推論（ダウンスケール版を保存）
+python scripts/run_bsrnet_custom.py \
+    --checkpoint results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth \
+    --input test_inputs/ --output results/bsrnet_v2/
+
+# PSNR+SSIM 評価
+python scripts/eval_bsrnet_psnr.py \
+    --checkpoint results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth \
+    --testset testsets/custom_natural/pexels-cc0-100-2/
+```
+
+---
+
+### bsrnet_x4_psnr_scratch_unsplash_lite_v2_last.pth
+
+| 項目 | 値 |
+|---|---|
+| アーキテクチャ | RRDBNet x4 (`nf=64, gc=32, nb=23`) |
+| 学習フェーズ | ゼロから（scratch）— PSNR フェーズ（L1 損失のみ） |
+| その他条件 | v2_best と同じ |
+| イテレーション | step 500k（最終 EMA 重み） |
+| 保存内容 | EMA 重み（`last_E`）の `state_dict` のみ |
+| 備考 | GAN フェーズの pretrained_netG 候補（best との比較用） |
+
+```bash
+# GAN フェーズの pretrained_netG として使用する場合
+cp results/trained_models/bsrnet_x4_psnr_scratch_unsplash_lite_v2_best.pth \
+   models/KAIR/model_zoo/BSRNet_unsplash_v2.pth
+# → options/train_bsrgan_x4_gan_finetune.json の pretrained_netG を上記パスに変更
+```
+
+---
+
+## v1 → v2 の変更点
+
+| 項目 | v1 | v2 |
 |---|---|---|
-| 学習データ | Unsplash Lite ~1,900 枚 | Unsplash Lite ~3,000〜3,500 枚 |
+| 学習データ | Unsplash Lite ~1,900 枚 | Unsplash Lite 3,511 枚 |
 | テストデータ（学習中） | pexels-cc0（41 枚）| pexels-cc0-100-1（100 枚） |
+| 評価方式 | seed なし | seed=0 固定 |
+| Best PSNR | 23.21 dB（旧テストセット）/ 20.76 dB（pexels-cc0-100-2） | 21.54 dB（pexels-cc0-100-2） |
 | 出力ディレクトリ | `results/train_bsrgan_psnr/` | `results/train_bsrgan_psnr_v2/` |
-| 目標 | 公式モデルとのギャップ確認 | データ量増量後の性能改善確認 |
