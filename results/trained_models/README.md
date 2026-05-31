@@ -100,14 +100,15 @@ cp results/trained_models/bsrnet_x4_scratch_unsplash_lite_v1_last.pth \
 | テストデータ（学習中モニタリング） | pexels-cc0-100-1（100 枚 PNG、768×768） |
 | テストデータ（seed 固定評価） | pexels-cc0-100-2（100 枚 PNG、768×768） |
 | 学習設定 | `options/train_bsrgan_x4_psnr_unsplash.json` |
-| イテレーション | 500k（Best は step 420k） |
+| イテレーション | 500k（Best は step 470k） |
 | GPU 学習時間 | 約 79h（RTX 3060、10 セッション合計） |
 | LR スケジュール | 初期 1e-4 → 200k で 5e-5 → 400k で 2.5e-5 |
 | 劣化パイプライン | BSRGAN degradation（`lq_patchsize=72, H_size=320, sf=4`） |
 | EMA decay | 0.999 |
-| Best PSNR（seed=0） | **21.54 dB**（pexels-cc0-100-2 100 枚） |
-| Best SSIM（seed=0） | **0.4892**（同上） |
-| 保存内容 | EMA 重み（`netE` @ step 420k）の `state_dict` のみ |
+| Best PSNR（seed=0） | **21.14 dB**（pexels-cc0-100-2 100 枚） |
+| Best SSIM（seed=0） | **0.4616**（同上） |
+| 保存内容 | EMA 重み（`netE` @ step 470k）の `state_dict` のみ |
+| 評価方法 | `np.random` + `random` 両方 seed=0 固定（quality_curve2.tsv） |
 | 完了日 | 2026-05-30 |
 
 ```bash

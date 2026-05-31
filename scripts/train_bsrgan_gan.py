@@ -67,8 +67,11 @@ from data.dataset_blindsr import DatasetBlindSR
 # ---------------------------------------------------------------------------
 
 def evaluate_psnr(netE, test_loader, device, seed=0):
-    rng_state = np.random.get_state()
+    import random as _random
+    np_state  = np.random.get_state()
+    rnd_state = _random.getstate()
     np.random.seed(seed)
+    _random.seed(seed)
 
     netE.eval()
     psnrs = []
@@ -80,7 +83,8 @@ def evaluate_psnr(netE, test_loader, device, seed=0):
             mse = F.mse_loss(pred, H).item()
             psnrs.append(10.0 * math.log10(1.0 / mse) if mse > 1e-10 else 100.0)
 
-    np.random.set_state(rng_state)
+    np.random.set_state(np_state)
+    _random.setstate(rnd_state)
     return float(np.mean(psnrs))
 
 

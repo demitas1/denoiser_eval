@@ -72,8 +72,11 @@ def build_model(state_dict, device):
 
 def evaluate(model, loader, device, seed):
     """PSNR と SSIM の mean / min / max を返す。"""
-    rng_state = np.random.get_state()
+    import random as _random
+    np_state  = np.random.get_state()
+    rnd_state = _random.getstate()
     np.random.seed(seed)
+    _random.seed(seed)
     psnrs, ssims = [], []
     with torch.no_grad():
         for batch in loader:
@@ -88,7 +91,8 @@ def evaluate(model, loader, device, seed):
             h_np = H.squeeze(0).permute(1, 2, 0).cpu().numpy()
             ssims.append(ssim_metric(h_np, pred_np, data_range=1.0, channel_axis=-1))
 
-    np.random.set_state(rng_state)
+    np.random.set_state(np_state)
+    _random.setstate(rnd_state)
     return {
         'psnr_mean': float(np.mean(psnrs)),
         'psnr_min':  float(np.min(psnrs)),
